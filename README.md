@@ -1,5 +1,5 @@
 # HackerRank Orchestrate
-
+[HackerRank Challenge](https://www.hackerrank.com/contests/hackerrank-orchestrate-june26/challenges/multi-modal-review)
 Starter repository for the **HackerRank Orchestrate** 24-hour hackathon.
 
 Build a system that verifies visual evidence for damage claims across three object types: **cars**, **laptops**, and
