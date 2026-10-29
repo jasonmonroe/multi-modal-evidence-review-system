@@ -1,26 +1,22 @@
 # code/src/utils.py
 
-# +-----------------------------------+
-# |        UTILITY FUNCTIONS          |
-# +-----------------------------------+
+# +---------------------------------------------------------------------------+
+# |                            UTILITY FUNCTIONS                              |
+# +---------------------------------------------------------------------------+
 # Utility Functions used throughout project.
 
 # Python Libraries
-import os
-from datetime import datetime
 import textwrap
 import time
 import uuid
+from datetime import datetime
 
 # Local Libraries
-from src.constants import (
-    MSEC,
-    SECS_IN_MIN,
-    PEP8_LINE_LEN, CHAT_TRANSCRIPT_FILE
-)
+from src.constants import CHAT_TRANSCRIPT_FILE, MSEC, PEP8_LINE_LEN, SECS_IN_MIN
+
 
 def get_run_id() -> str:
-    """ Generates a unique ID for the current run. """
+    """Generates a unique ID for the current run."""
     return uuid.uuid4().hex[:5].upper()
 
 
@@ -37,7 +33,7 @@ def get_time(start_time_float: float, end_time_float: float | None = None) -> st
         end_time_float = time.time()
 
     diff = abs(end_time_float - start_time_float)
-    _, remainder = divmod(diff, SECS_IN_MIN*SECS_IN_MIN)
+    _, remainder = divmod(diff, SECS_IN_MIN * SECS_IN_MIN)
     minutes, seconds = divmod(remainder, SECS_IN_MIN)
     fractional_seconds = seconds - int(seconds)
 
@@ -50,18 +46,18 @@ def show_timer(start_time_int: float) -> None:
 
 
 def _make_top_btm_line() -> str:
-    open_close_len = 2 # open close of char `+` or `|`
+    open_close_len = 2  # open close of char `+` or `|`
     max_line_len = PEP8_LINE_LEN - open_close_len
 
-    return '+' + ('-' * max_line_len) + '+'
+    return "+" + ("-" * max_line_len) + "+"
 
 
-def _create_title_banner(text: str, center_text: bool=True) -> None:
-    open_close_len = 4 # open close of char `+` or `|`
+def _create_title_banner(text: str, center_text: bool = True) -> None:
+    open_close_len = 4  # open close of char `+` or `|`
     max_line_len = PEP8_LINE_LEN - open_close_len
 
     # Trim off any chars after limit plus two spaces for blanks
-    text = text[0: max_line_len - open_close_len]
+    text = text[0 : max_line_len - open_close_len]
     text_len = len(text)
     padding_len = max_line_len - text_len
 
@@ -70,11 +66,13 @@ def _create_title_banner(text: str, center_text: bool=True) -> None:
         extra_len = 0 if padding_len % 2 == 0 else 1
 
         padding_len = padding_len // 2
-        title_line = "| " + (' ' * padding_len) + text + (' ' * (padding_len + extra_len)) + " |"
+        title_line = (
+            "| " + (" " * padding_len) + text + (" " * (padding_len + extra_len)) + " |"
+        )
 
     else:
         # Remove last two characters to account for open/close spacing
-        title_line = "| " + text + (' ' * padding_len) + " |"
+        title_line = "| " + text + (" " * padding_len) + " |"
 
     top_btm_line = _make_top_btm_line()
 
@@ -85,12 +83,12 @@ def _create_title_banner(text: str, center_text: bool=True) -> None:
     print(top_btm_line)
 
 
-def _create_subtitle_banner(text: str | list, center_text: bool=False) -> None:
+def _create_subtitle_banner(text: str | list, center_text: bool = False) -> None:
     # Reconstructs the guard to safely catch wrong types OR empty values
     if not isinstance(text, (str, list)) or not text:
-        return None
+        return
 
-    open_close_len = 4 # open close of char `+` or `|` plus space
+    open_close_len = 4  # open close of char `+` or `|` plus space
     max_line_len = PEP8_LINE_LEN - open_close_len
     wrapped_lines = _get_wrapped_lines(text, max_line_len)
 
@@ -104,9 +102,15 @@ def _create_subtitle_banner(text: str | list, center_text: bool=False) -> None:
         if center_text:
             extra_len = 0 if padding_len % 2 == 0 else 1
             padding_len = padding_len // 2
-            padded_line = "| " + (' ' * padding_len) + line + (' ' * (padding_len + extra_len)) + " |"
+            padded_line = (
+                "| "
+                + (" " * padding_len)
+                + line
+                + (" " * (padding_len + extra_len))
+                + " |"
+            )
         else:
-            padded_line = "| " + line + (' ' * padding_len) + " |"
+            padded_line = "| " + line + (" " * padding_len) + " |"
 
         print(padded_line)
 
@@ -114,7 +118,6 @@ def _create_subtitle_banner(text: str | list, center_text: bool=False) -> None:
     if len(wrapped_lines) > 0:
         print(_make_top_btm_line())
 
-    return None
 
 def _get_wrapped_lines(text: str | list, max_line_len: int) -> list:
     wrapped_lines = []
@@ -132,11 +135,18 @@ def _get_wrapped_lines(text: str | list, max_line_len: int) -> list:
 
     return wrapped_lines
 
-def show_banner(title: str, subtitle: str | list | None="", center_title_text: bool=True, center_subtitle_text: bool=False) -> None:
+
+def show_banner(
+    title: str,
+    subtitle: str | list | None = "",
+    center_title_text: bool = True,
+    center_subtitle_text: bool = False,
+) -> None:
     _create_title_banner(title, center_title_text)
 
     if subtitle:
         _create_subtitle_banner(subtitle, center_subtitle_text)
+
 
 def log_chat_transcript(stage: str, content: str) -> None:
     """
@@ -152,12 +162,7 @@ def log_chat_transcript(stage: str, content: str) -> None:
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     divider = "=" * PEP8_LINE_LEN
 
-    log_entry = (
-        f"\n{divider}\n"
-        f"[{timestamp}] - STAGE: {stage}\n"
-        f"{divider}\n"
-        f"{content}\n"
-    )
+    log_entry = f"\n{divider}\n[{timestamp}] - STAGE: {stage}\n{divider}\n{content}\n"
 
     # Ensure the file appends cleanly
     with open(CHAT_TRANSCRIPT_FILE, "a", encoding="utf-8") as log_file:

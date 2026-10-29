@@ -1,20 +1,18 @@
-# code/evaluation/claim_analyzer.py
+# code/agents/claim_analyzer_agent.py
+
+# +---------------------------------------------------------------------------+
+# |                              CLAIM ANALYZER                               |
+# +---------------------------------------------------------------------------+
 
 # Python Libraries
 import pandas as pd
 
 # Local Libraries
 from models.insurance_agent_model import InsuranceAgentModel
-
-from src.constants import (
-    MODEL_NAME,
-    PEP8_LINE_LEN,
-    DECISION_N,
-    DECISION_C
-)
+from src.constants import DECISION_C, DECISION_N, MODEL_NAME
 from src.data_handler import DataHandler
 from src.image_handler import ImageHandler
-from src.utils import show_banner, start_timer, show_timer, log_chat_transcript
+from src.utils import log_chat_transcript, show_banner, show_timer, start_timer
 
 
 class ClaimAnalyzer:
@@ -47,10 +45,9 @@ class ClaimAnalyzer:
             "claim_object": self._row["claim_object"],
             "images": self.image.images,
             "image_filenames": self.image.filenames,
-            "user_history": self._get_user_history(user_id), # dataframe
-
+            "user_history": self._get_user_history(user_id),  # dataframe
             # Note: 💡 Include row for reference
-            "csv_row": self._row
+            "csv_row": self._row,
         }
 
     def _format_user_claim(self, user_claim: str) -> str:
@@ -73,26 +70,33 @@ class ClaimAnalyzer:
 
     def _generate_evidence_prompt(self) -> str:
         """
-        Generates a prompt for evidence that has the rules and then converts the instructions to a string.
+        Generates a prompt for evidence that has the rules and then converts
+        the instructions to a string.
         :return:
         """
 
-        # Generate a prompt pertaining to the evidence policy.  Include instructions for the LLM to understand it.
+        # Generate a prompt pertaining to the evidence policy.  Include
+        # instructions for the LLM to understand it.
         instructions = [
             "You must enforce the following strict evidence validation rules per company policy.",
-            "If any rule fails, immediately set `evidence_standard_met` to `false`."
+            "If any rule fails, immediately set `evidence_standard_met` to `false`.",
         ]
 
         claim_object = self._row["claim_object"]
         requirements_df = self.data.evidence_reqs
 
-        # Separate all rules and claim object specific rules and then combine them for relevant usage.
+        # Separate all rules and claim object specific rules and then combine
+        # them for relevant usage.
         all_requirements_df = requirements_df["claim_object"] == "all"
         claim_object_requirements_df = requirements_df["claim_object"] == claim_object
 
-        # Combine rules that apply to 'all' objects and those specific to the current claim_object.
-        # We include all rules for the object because the specific issue_type isn't known until the LLM analyzes the images.
-        requirements = requirements_df[all_requirements_df | claim_object_requirements_df]
+        # Combine rules that apply to 'all' objects and those specific to the
+        # current claim_object.
+        # We include all rules for the object because the specific issue_type
+        # isn't known until the LLM analyzes the images.
+        requirements = requirements_df[
+            all_requirements_df | claim_object_requirements_df
+        ]
 
         for row_df in requirements.itertuples():
             rule_no = len(instructions)
@@ -119,7 +123,8 @@ class ClaimAnalyzer:
 
     def call(self, dataset: dict) -> str | dict | None:
         """
-        Calls the InsuranceAgentModel to get a response based on the dataset provided.
+        Calls the InsuranceAgentModel to get a response based on the dataset
+        provided.
         dataset must be set.
         :param dataset:
         :return:
@@ -173,9 +178,10 @@ class ClaimAnalyzer:
         # Log Model Response: Log exactly what the raw LLM outputted
         log_chat_transcript(f"ROW INDEX {index} - RAW LLM RESPONSE", str(response))
 
-        # Although the LLM provides a claim status and risk flags, we need to apply deterministic business logic to
-        # ensure consistency and compliance with company policy. Review analysis, make a final decision based on user
-        # history and risk assessment.
+        # Although the LLM provides a claim status and risk flags, we need to
+        # apply deterministic business logic to ensure consistency and
+        # compliance with company policy. Review analysis, make a final decision
+        # based on user history and risk assessment.
         dataset = self._make_decision(dataset)
 
         # LOG FINAL RESOLUTION: Record the deterministic final output state
@@ -183,20 +189,26 @@ class ClaimAnalyzer:
             f"Resolved Risk Flags: {dataset['risk_flags']}\n"
             f"Overridden Claim Status: {dataset['claim_status']}"
         )
-        log_chat_transcript(f"ROW INDEX {index} - POST-PROCESS MAKE DECISION", final_decision_summary)
+
+        log_chat_transcript(
+            f"ROW INDEX {index} - POST-PROCESS MAKE DECISION", final_decision_summary
+        )
 
         return dataset
 
-    def _make_decision(self, dataset:dict) -> dict:
+    def _make_decision(self, dataset: dict) -> dict:
         """
-        Take the risk_flags and claim status from the LLM and make a final decision based on user history and risk assessment.
+        Take the risk_flags and claim status from the LLM and make a final
+        decision based on user history and risk assessment.
 
         :param dataset:
         :return:
         """
 
         user_history = dataset.get("user_history")
-        user_history_has_risk = "user_history_risk" in user_history["history_flags"].values
+        user_history_has_risk = (
+            "user_history_risk" in user_history["history_flags"].values
+        )
 
         # Parse the LLM's suggested fields
         risk_flags = set(dataset.get("risk_flags", "none").split(";"))
@@ -213,7 +225,10 @@ class ClaimAnalyzer:
             risk_flags.add("user_history_risk")
             risk_flags.add("manual_review_required")
 
-        if "text_instruction_present" in risk_flags or "possible_manipulation" in risk_flags:
+        if (
+            "text_instruction_present" in risk_flags
+            or "possible_manipulation" in risk_flags
+        ):
             claim_status = DECISION_C
             risk_flags.add("manual_review_required")
             valid_image = False
@@ -233,10 +248,14 @@ class ClaimAnalyzer:
         # Format risk flags back to expected CSV format
         final_risk_flags = ";".join(sorted(risk_flags)) if risk_flags else "none"
 
-        dataset["claim_status"] = claim_status
-        dataset["evidence_standard_met"] = evidence_standard_met
-        dataset["risk_flags"] = final_risk_flags
-        dataset["severity"] = severity
-        dataset["valid_image"] = valid_image
+        new_dataset = {
+            "claim_status": claim_status,
+            "evidence_standard_met": evidence_standard_met,
+            "risk_flags": final_risk_flags,
+            "severity": severity,
+            "valid_image": valid_image,
+        }
+
+        dataset.update(new_dataset)
 
         return dataset

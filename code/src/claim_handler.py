@@ -1,16 +1,21 @@
-# code/evaluation/claim_handler.py
+# code/src/claim_handler.py
+
+# +---------------------------------------------------------------------------+
+# |                               CLAIM HANDLER                               |
+# +---------------------------------------------------------------------------+
 
 # Python Libraries
 import csv
 
 # Local Libraries
-from src.constants import  TEST_FILE
+from src.constants import TEST_FILE
 
 
 class ClaimHandler:
     """
     Claim Handler used for output
     """
+
     def __init__(self):
         """
         Columns for output.csv
@@ -49,14 +54,18 @@ class ClaimHandler:
             self.image_paths = ";".join(self.image_paths).strip()
 
         if isinstance(self.supporting_image_ids, list):
-            self.supporting_image_ids = ";".join(str(id) for id in self.supporting_image_ids)
+            self.supporting_image_ids = ";".join(
+                str(id) for id in self.supporting_image_ids
+            )
             self.supporting_image_ids = self.supporting_image_ids.strip()
 
         if isinstance(self.evidence_standard_met, bool):
             self.evidence_standard_met = str(self.evidence_standard_met).lower()
 
         if isinstance(self.evidence_standard_met_reason, str):
-            self.evidence_standard_met_reason = self.evidence_standard_met_reason.strip()
+            self.evidence_standard_met_reason = (
+                self.evidence_standard_met_reason.strip()
+            )
 
         if isinstance(self.claim_status_justification, str):
             self.claim_status_justification = self.claim_status_justification.strip()
@@ -74,8 +83,8 @@ class ClaimHandler:
                 # Clean up apostrophes from strings safely
                 value = value.replace("'", "").replace("’", "")
 
+            # Convert None to empty spaces seamlessly
             elif value is None:
-                # Convert None to empty spaces seamlessly
                 value = ""
 
             csv_row.append(value)
@@ -90,7 +99,7 @@ class ClaimHandler:
         :param total:
         :return:
         """
-        print("")
+        print("\n")
 
         i_empty, i_full = "☑️", "✅️"
         completion_pct = ((idx + 1) / total) * 100

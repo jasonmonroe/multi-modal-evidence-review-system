@@ -1,28 +1,41 @@
 # code/main.py
 
-# +-----------------------------------+
-# | HACKERRANK ORCHESTRATE CHALLENGE  |
-# +-----------------------------------+
-# @link https://www.hackerrank.com/contests/hackerrank-orchestrate-june26/challenges/multi-modal-review
-# Clone Repo - @link https://github.com/interviewstreet/hackerrank-orchestrate-june26
+"""
++-----------------------------------+
+| HACKERRANK ORCHESTRATE CHALLENGE  |
++-----------------------------------+
+
+@link https://www.hackerrank.com/contests/hackerrank-orchestrate-june26/challenges/multi-modal-review
+Clone Repo - @link https://github.com/jasonmonroe/multi-modal-evidence-review-system
+
+Build a system that verifies visual evidence for damage claims across three
+object types: cars, laptops, and packages.
+
+Your system will receive claim conversations, one or more submitted images,
+user claim history, and minimum evidence requirements. It must decide whether
+the submitted images support the claim, contradict it, or do not provide enough
+information.
+"""
 
 __author__ = "Jason Monroe (jason@jasonmonroe.com)"
-__copyright__ = "Copyright © 2011-2026 Monroe Labs"
+__copyright__ = "Copyright © 2011-2026"
 __date__ = "2026-07-08"
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 # Python Libraries
 from dotenv import load_dotenv
+from pipelines.run_claims_pipeline import run_claims_pipeline
+
 load_dotenv("../.env")
 
 import sys
 import warnings
 
 # Local Libraries
-from evaluation.main import run_claim_pipeline, run_evaluation_report_pipeline
+from evaluation.main import run_evaluation_report_pipeline
 from src.data_handler import DataHandler
 from src.image_handler import ImageHandler
-from src.utils import start_timer, show_timer, show_banner
+from src.utils import show_banner, show_timer, start_timer
 
 
 def run_main_pipeline(args: dict):
@@ -41,7 +54,7 @@ def run_main_pipeline(args: dict):
     if args.get("eda"):
         data_handle.describe()
 
-    run_claim_pipeline(data_handle, image_handle)
+    run_claims_pipeline(data_handle, image_handle)
 
     # Run evaluation pipeline
     if args.get("eval"):
@@ -50,18 +63,18 @@ def run_main_pipeline(args: dict):
 
 def parse_args(command_line_args: list[str]) -> dict:
     args_list = ["--eda", "--eval", "--sample"]
-    return {arg.strip('--'): (arg in command_line_args) for arg in args_list}
+    return {arg.strip("--"): (arg in command_line_args) for arg in args_list}
 
 
 if __name__ == "__main__":
-    warnings.filterwarnings('ignore')
+    warnings.filterwarnings("ignore")
 
     prog_start_time = start_timer()
     run_id = str(int(prog_start_time))[-6:]
-    print(f'\n----- 🖨️️ START RUN ID: {run_id} 🖨️️ -----')
+    print(f"\n----- 🖨️️ START RUN ID: {run_id} 🖨️️ -----")
 
     args = parse_args(sys.argv[1:])
     run_main_pipeline(args)
 
     show_timer(prog_start_time)
-    print(f'\n----- 🖨️️ END RUN ID: {run_id} 🖨️️ -----\n')
+    print(f"\n----- 🖨️️ END RUN ID: {run_id} 🖨️️ -----\n")

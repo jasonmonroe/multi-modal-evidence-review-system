@@ -1,10 +1,10 @@
 # code/src/constants.py
 
-import os
+# +---------------------------------------------------------------------------+
+# |                                 CONSTANTS                                 |
+# +---------------------------------------------------------------------------+
 
-# +-----------------------------------+
-# |           CONSTANTS               |
-# +-----------------------------------+
+import os
 
 MAX_TOKENS = 4096
 TOKEN_UNIT = 1000
@@ -50,7 +50,7 @@ CSV_HEADERS = [
     "claim_status_justification",
     "supporting_image_ids",
     "valid_image",
-    "severity"
+    "severity",
 ]
 
 # --- JSON Schema ---
@@ -61,7 +61,7 @@ RESPONSE_SCHEMA = {
     "properties": {
         "claim_status": {
             "type": "string",
-            "enum": [DECISION_S, DECISION_C, DECISION_N]
+            "enum": [DECISION_S, DECISION_C, DECISION_N],
         },
         "claim_status_justification": {"type": "string"},
         "evidence_standard_met": {"type": "boolean"},
@@ -80,30 +80,51 @@ RESPONSE_SCHEMA = {
                 "stain",
                 "torn_packaging",
                 "unknown",
-                "water_damage"
-            ]
+                "water_damage",
+            ],
         },
         "object_part": {
             "type": "string",
             "enum": [
-                "base", "box", "body", "contents", "corner", "door",
-                "fender", "front_bumper", "headlight", "hinge", "hood",
-                "item", "keyboard", "label", "lid", "package_corner",
-                "package_side", "port", "quarter_panel", "rear_bumper",
-                "screen", "seal", "side_mirror", "taillight", "trackpad",
-                "unknown", "windshield"
-            ]
+                "base",
+                "box",
+                "body",
+                "contents",
+                "corner",
+                "door",
+                "fender",
+                "front_bumper",
+                "headlight",
+                "hinge",
+                "hood",
+                "item",
+                "keyboard",
+                "label",
+                "lid",
+                "package_corner",
+                "package_side",
+                "port",
+                "quarter_panel",
+                "rear_bumper",
+                "screen",
+                "seal",
+                "side_mirror",
+                "taillight",
+                "trackpad",
+                "unknown",
+                "windshield",
+            ],
         },
         "risk_flags": {
             "type": "string",
-            "pattern": "^(none|blurry_image|cropped_or_obstructed|low_light_or_glare|wrong_angle|wrong_object|wrong_object_part|damage_not_visible|claim_mismatch|possible_manipulation|non_original_image|text_instruction_present|user_history_risk|manual_review_required)(;(blurry_image|cropped_or_obstructed|low_light_or_glare|wrong_angle|wrong_object|wrong_object_part|damage_not_visible|claim_mismatch|possible_manipulation|non_original_image|text_instruction_present|user_history_risk|manual_review_required))*$"
+            "pattern": "^(none|blurry_image|cropped_or_obstructed|low_light_or_glare|wrong_angle|wrong_object|wrong_object_part|damage_not_visible|claim_mismatch|possible_manipulation|non_original_image|text_instruction_present|user_history_risk|manual_review_required)(;(blurry_image|cropped_or_obstructed|low_light_or_glare|wrong_angle|wrong_object|wrong_object_part|damage_not_visible|claim_mismatch|possible_manipulation|non_original_image|text_instruction_present|user_history_risk|manual_review_required))*$",
         },
         "severity": {
             "type": "string",
-            "enum": ["none", "low", "medium", "high", "unknown"]
+            "enum": ["none", "low", "medium", "high", "unknown"],
         },
         "supporting_image_ids": {"type": "string"},
-        "valid_image": {"type": "boolean"}
+        "valid_image": {"type": "boolean"},
     },
     "required": [
         "claim_status",
@@ -115,9 +136,9 @@ RESPONSE_SCHEMA = {
         "risk_flags",
         "severity",
         "supporting_image_ids",
-        "valid_image"
+        "valid_image",
     ],
-    "additionalProperties": False
+    "additionalProperties": False,
 }
 
 # Prompt Instructions
