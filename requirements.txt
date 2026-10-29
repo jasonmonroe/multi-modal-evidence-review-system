@@ -6,3 +6,4 @@ opencv-python
 pandas
 Pillow
 python-dotenv
+pytest

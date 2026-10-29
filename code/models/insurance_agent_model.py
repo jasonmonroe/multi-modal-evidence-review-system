@@ -8,6 +8,7 @@
 import json
 
 # Vendor Libraries
+from evaluation.usage_tracker import UsageTracker
 from openai import OpenAI
 from openai.types.chat import ChatCompletion
 
@@ -37,6 +38,7 @@ class InsuranceAgentModel:
             return
 
         self._client = self._init_llm_model(row_total)
+        self.usage = UsageTracker()
         self._user_id = ""
         self._claim_object = ""
         self._user_claim = ""
@@ -126,9 +128,11 @@ class InsuranceAgentModel:
         if not self._client:
             return {}
 
+        message_attrs = self._get_message()
+
         response = self._client.chat.completions.create(
             model=MODEL_NAME,
-            messages=self._get_message(),
+            messages=message_attrs,
             max_completion_tokens=MAX_TOKENS,
             response_format=self._get_response_format(),
             temperature=0.0,
@@ -136,9 +140,26 @@ class InsuranceAgentModel:
             timeout=90.0,
         )
 
-        return self._filter_response(response)
+        # Pluck prompt aka user_content_payload from message attribute to
+        # track usage.
+        prompt = message_attrs[1].get("content") or ""
 
-    def _filter_response(self, response: ChatCompletion) -> dict:
+        return self._filter_response(response, prompt)
+
+    def _filter_response(self, response: ChatCompletion, prompt: str) -> dict:
+        # Extrapolate response
+        self.usage.response_id = response.id
+
+        # model: str, input_tokens: int, output_tokens: int, prompt: str
+        if hasattr(response, "usage"):
+            usage = response.usage
+            self.usage.record(
+                model=response.model,
+                input_tokens=usage.prompt_token,
+                output_tokens=usage.completion_tokens,
+                prompt=prompt,
+            )
+
         try:
             content_str = response.choices[0].message.content
             if not content_str:
