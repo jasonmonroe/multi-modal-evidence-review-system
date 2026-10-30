@@ -148,8 +148,6 @@ class InsuranceAgentModel:
 
     def _filter_response(self, response: ChatCompletion, prompt: str) -> dict:
         # Extrapolate response
-        self.usage.response_id = response.id
-
         # model: str, input_tokens: int, output_tokens: int, prompt: str
         if hasattr(response, "usage"):
             usage = response.usage
@@ -158,6 +156,7 @@ class InsuranceAgentModel:
                 input_tokens=usage.prompt_token,
                 output_tokens=usage.completion_tokens,
                 prompt=prompt,
+                response_id=response.id,
             )
 
         try:

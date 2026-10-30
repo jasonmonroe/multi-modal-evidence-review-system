@@ -7,3 +7,4 @@ pandas
 Pillow
 python-dotenv
 pytest
+pytest-cov

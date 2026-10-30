@@ -1,6 +1,5 @@
 # code/evaluation/usage_tracker.py
 
-
 """
 +-----------------------------------------------------------------------------+
 |                              USAGE TRACKER                                  |
@@ -20,20 +19,21 @@ from src.constants import MAX_TOKENS
 
 @dataclass
 class ModelUsage:
+    response_id: str = ""
     calls: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
 
     least: dict = field(
         default_factory=lambda: {
-            "response_id": None,
+            "response_id": "",
             "tokens": MAX_TOKENS * 2,
             "prompt": "",
         }
     )
 
     most: dict = field(
-        default_factory=lambda: {"response_id": None, "tokens": 0, "prompt": ""}
+        default_factory=lambda: {"response_id": "", "tokens": 0, "prompt": ""}
     )
 
     @property
@@ -44,16 +44,20 @@ class ModelUsage:
 class UsageTracker:
     def __init__(self):
         self._by_model: dict[str, ModelUsage] = {}
-        self.response_id = None
 
     def record(
-        self, model: str, input_tokens: int, output_tokens: int, prompt: str
+        self,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        prompt: str,
+        response_id,
     ) -> None:
         usage = self._by_model.setdefault(model, ModelUsage())
 
         total_tokens = input_tokens + output_tokens
         token_data = {
-            "resource_id": self.response_id,
+            "resource_id": response_id,
             "prompt": prompt,
             "tokens": total_tokens,
         }
