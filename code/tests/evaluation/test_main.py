@@ -46,8 +46,75 @@ class TestGenerateReportTemplate:
             {"Basic Prompt": metrics(), "Chain-of-Thought Prompt": metrics(accuracy=75)}
         )
         text = report.read_text()
-        assert "| Basic Prompt | 50.00% | 2.50s | $0.01 |" in text
-        assert "| Chain-of-Thought Prompt | 75.00% | 2.50s | $0.01 |" in text
+        assert "| Basic Prompt | 2 | 1 | 50.00% | 2.50s | 1.25s | 1,500 | $0.01 |" in text
+        assert "| Chain-of-Thought Prompt | 2 | 1 | 75.00% | 2.50s | 1.25s | 1,500 | $0.01 |" in text
+
+    def test_no_layout_indentation_leaks_into_markdown(self, report):
+        ev.generate_report_template(
+            {"A": metrics(), "B": metrics(accuracy=75)}
+        )
+        for line in report.read_text().splitlines():
+            assert line == line.lstrip(), repr(line)
+
+    def test_sample_count_reported(self, report):
+        ev.generate_report_template({"A": metrics(total=20)})
+        assert "(20 labeled claims)" in report.read_text()
+
+    def test_no_placeholder_left_in_output(self, report):
+        ev.generate_report_template({"A": metrics()})
+        text = report.read_text()
+        assert "[X]" not in text and "because..." not in text
+
+    def test_model_calls_and_throughput(self, report):
+        # 2 strategies x 2 rows = 4 calls in 60s total -> 4 req/min, 3000 tok/min
+        ev.generate_report_template(
+            {"A": metrics(duration=30.0), "B": metrics(duration=30.0)}
+        )
+        text = report.read_text()
+        assert "**Model Calls:** 4" in text
+        assert "4.0 requests/min" in text
+        assert "3,000 tokens/min" in text
+
+    def test_zero_duration_and_zero_samples_do_not_divide_by_zero(self, report):
+        ev.generate_report_template(
+            {"A": metrics(total=0, correct=0, duration=0.0, accuracy=0)}
+        )
+        text = report.read_text()
+        assert "0.0 requests/min" in text and "0.00s" in text
+
+    def test_pacing_settings_documented(self, report):
+        ev.generate_report_template({"A": metrics()})
+        text = report.read_text()
+        assert f"{ev.SLEEP_TIMER}s and retries" in text
+        assert f"{ev.PAUSE_TIMER}s pause" in text
+
+    def test_choice_prefers_highest_accuracy(self, report):
+        ev.generate_report_template(
+            {"Basic Prompt": metrics(accuracy=50), "Chain-of-Thought Prompt": metrics(accuracy=80)}
+        )
+        text = report.read_text()
+        assert "We chose **Chain-of-Thought Prompt** because it had the highest accuracy (80.00%)." in text
+
+    def test_choice_breaks_accuracy_tie_on_cost(self, report):
+        ev.generate_report_template(
+            {"A": metrics(total_cost=2.0), "B": metrics(total_cost=1.0)}
+        )
+        text = report.read_text()
+        assert "We chose **B**" in text and "lowest estimated cost" in text
+
+    def test_choice_breaks_full_tie_on_runtime(self, report):
+        ev.generate_report_template(
+            {"A": metrics(duration=9.0), "B": metrics(duration=3.0)}
+        )
+        assert "We chose **B**" in report.read_text()
+
+    def test_single_strategy_choice(self, report):
+        ev.generate_report_template({"Only": metrics()})
+        assert "only strategy evaluated" in report.read_text()
+
+    def test_no_strategies_has_no_choice(self, report):
+        ev.generate_report_template({})
+        assert "No strategies were evaluated." in report.read_text()
 
     def test_token_and_cost_totals(self, report):
         ev.generate_report_template(
@@ -56,6 +123,7 @@ class TestGenerateReportTemplate:
         text = report.read_text()
         assert "**Total Token Usage:** 4,000" in text
         assert "**Approximate Cost:** $1.50" in text
+        assert "flat $0.01 per 1,000 tokens" in text
         assert "**Model Used:** test-model" in text
 
     def test_empty_results_still_writes_zero_totals(self, report):
@@ -63,6 +131,7 @@ class TestGenerateReportTemplate:
         text = report.read_text()
         assert "**Total Token Usage:** 0" in text
         assert "**Approximate Cost:** $0.00" in text
+        assert "**Model Calls:** 0" in text
 
     def test_missing_metric_key_raises(self, report):
         with pytest.raises(KeyError):

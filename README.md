@@ -1,7 +1,10 @@
 # Multi-Modal Evidence Review System
 
-A submission for the [HackerRank Orchestrate (June 2026) – Multi-Modal Evidence Review](https://www.hackerrank.com/contests/hackerrank-orchestrate-june26/challenges/multi-modal-review)
-challenge.
+An automated reviewer for insurance-style damage claims. It looks at the photos a customer submitted, reads the claim
+conversation, and decides whether the evidence backs the claim up.
+
+> Post-hackathon rework of my June 2026 hackathon entry. The original, as submitted, is preserved at the git tag
+> `hackathon-submission-june26`.
 
 The system verifies damage claims for three object types — `car`, `laptop`, and `package` — by combining:
 
@@ -21,7 +24,8 @@ The model's answer is not final. A deterministic rule layer (`ClaimAnalyzer._mak
 policy: it injects history risk flags, forces `contradicted` for prompt-injection or manipulation, invalidates
 non-original images, and downgrades to `not_enough_information` when the evidence standard is not met.
 
-The full task description and I/O schema live in [problem_statement.md](problem_statement.md).
+The original task brief, including the full I/O schema and allowed values, is kept in
+[problem_statement.md](problem_statement.md) for reference.
 
 ---
 
@@ -67,7 +71,7 @@ The full task description and I/O schema live in [problem_statement.md](problem_
 ├── AGENTS.md                         # Agent/contributor rules and project contract
 ├── CLAUDE.md                         # Points Claude Code at AGENTS.md
 ├── README.md                         # You are here
-├── problem_statement.md              # Full task description and I/O schema
+├── problem_statement.md              # Original task brief and I/O schema
 ├── requirements.txt                  # Python dependencies
 ├── .env.example                      # Template for required environment variables
 ├── code/                             # The solution (run all commands from here)
@@ -97,7 +101,7 @@ The full task description and I/O schema live in [problem_statement.md](problem_
     ├── claims.csv                    # Inputs only; the rows to predict
     ├── user_history.csv              # Historical claim counts and risk context
     ├── evidence_requirements.csv     # Minimum image evidence requirements
-    ├── output.csv                    # Submission file (git-ignored)
+    ├── output.csv                    # Final predictions (git-ignored)
     ├── test.csv                      # Where `python main.py` currently writes predictions
     └── images/
         ├── sample/                   # Images referenced by sample_claims.csv
@@ -194,7 +198,7 @@ cp .env.example .env
 | `MODEL_NAME`    | Model identifier to call (must support image input)                 |
 | `MODEL_API_KEY` | API key for the provider; read from the environment only            |
 
-The code loads `../.env` relative to `code/`, so keep `.env` at the repository root.
+The code loads `.env` from the repository root, so keep it there.
 
 ### 5. Verify the setup
 
@@ -207,7 +211,8 @@ python -c "import openai, pandas, cv2, PIL, dotenv; print('Environment OK')"
 
 ## Running the System
 
-> All commands must be run from the `code/` directory — dataset and `.env` paths are relative to it.
+> Dataset, `.env`, and report paths are anchored to the source files, so commands work from any directory. The
+> examples below run from `code/`.
 
 ```bash
 cd code
@@ -233,7 +238,7 @@ python main.py --eval           # Predict on claims.csv, then evaluate on the sa
 ```
 
 > **Output location:** `TEST_FILE` in [code/src/constants.py](code/src/constants.py) currently points at
-> `dataset/test.csv`, so that is where predictions land. Copy the file to `output.csv` for submission, or change
+> `dataset/test.csv`, so that is where predictions land. Copy the file to `output.csv`, or change
 > `TEST_FILE` to `OUTPUT_FILE`.
 
 ---
@@ -305,7 +310,8 @@ Outputs:
 - Console summary of accuracy, tokens, cost, and timing per strategy
 - Operational analysis in [code/evaluation/evaluation_report.md](code/evaluation/evaluation_report.md)
 
-_TBD — final evaluation metrics (per-field accuracy, confusion matrix) to be added when complete._
+Accuracy is currently measured on `claim_status` only. Per-field accuracy (issue type, object part, severity, risk
+flags) is not yet reported.
 
 ---
 
@@ -360,17 +366,19 @@ See [problem_statement.md](problem_statement.md) for the complete list of allowe
 
 ## Cost, Latency, and Rate Limits
 
-_TBD — figures to be filled in from the final run._ Planned coverage in
-[code/evaluation/evaluation_report.md](code/evaluation/evaluation_report.md):
+`python main.py --eval` writes [code/evaluation/evaluation_report.md](code/evaluation/evaluation_report.md) with, for
+each prompting strategy: accuracy, runtime, token usage, and an estimated cost. Real per-call token counts come from
+each API response's `usage` field and are accumulated by `UsageTracker`, keyed by the model the provider reports.
 
-- Approximate model calls for sample and test processing
-- Input/output token usage and number of images processed
-- Estimated cost for the full test set, with pricing assumptions
-- Runtime and latency
-- TPM/RPM handling: pacing between requests (`PAUSE_TIMER`), back-off on rate-limit errors (`SLEEP_TIMER`,
-  `SLEEP_TIMER_INC`), and caching/batching strategy
+Rate-limit handling:
 
-Pacing and retry values are defined in [code/src/constants.py](code/src/constants.py).
+- Requests are paced with a pause between claims (`PAUSE_TIMER`).
+- A `RateLimitError` triggers a back-off pause (`SLEEP_TIMER`) and a retry; each retry adds `SLEEP_TIMER_INC`
+  seconds of extra pacing for the rest of the run.
+- The OpenAI client itself retries transient failures up to 3 times with a 120-second timeout.
+
+These values live in [code/src/constants.py](code/src/constants.py). Cost figures depend on the model and the pricing
+assumed in the report, so treat them as estimates.
 
 ---
 
@@ -378,21 +386,19 @@ Pacing and retry values are defined in [code/src/constants.py](code/src/constant
 
 | Symptom                                   | Likely cause / fix                                                              |
 |-------------------------------------------|---------------------------------------------------------------------------------|
-| `FileNotFoundError` for datasets or images | Run commands from `code/`, not the repository root                              |
+| `FileNotFoundError` for datasets or images | Confirm the `dataset/` folder exists at the repository root                     |
 | Authentication or `None` model errors     | `.env` missing or empty; confirm `MODEL_API_URL`, `MODEL_NAME`, `MODEL_API_KEY` |
 | `RateLimitError` / long pauses            | Expected on low-quota keys; the pipeline backs off and retries automatically    |
 | `ModuleNotFoundError`                     | Virtual environment not activated or `pip install -r requirements.txt` not run  |
 
 ---
 
-## Roadmap
+## Known Issues and Next Steps
 
-- [ ] Finalize prompts and structured output schema
-- [ ] Complete evaluation metrics and `evaluation_report.md`
-- [x] Add unit tests under `code/tests/` (full line coverage)
-- [ ] Fix the defects documented by the `xfail` tests
-- [ ] Add response caching to avoid repeated model calls
-- [ ] Refresh this README with final architecture, results, and cost analysis
+- Several defects are documented by the `xfail` tests in `code/tests/` (see
+  [Running the Unit Tests](#running-the-unit-tests)); fixing them is the next cleanup.
+- Add response caching so unchanged claims are not sent to the model again.
+- Report per-field accuracy and a confusion matrix, not just `claim_status` accuracy.
 
 ---
 

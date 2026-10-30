@@ -1,5 +1,6 @@
 # code/tests/src/test_constants.py
 
+import os
 import re
 
 from src import constants as c
@@ -39,6 +40,26 @@ class TestScalarConstants:
             assert isinstance(path, str)
             assert path.startswith(c.DATASET_DIR)
             assert path.endswith(name)
+
+    def test_paths_are_absolute_and_independent_of_cwd(self, tmp_path, monkeypatch):
+        import importlib
+
+        monkeypatch.chdir(tmp_path)
+        reloaded = importlib.reload(c)
+        try:
+            for path in (
+                reloaded.DATASET_DIR,
+                reloaded.CLAIMS_FILE,
+                reloaded.TEST_FILE,
+                reloaded.REPORT_FILE,
+                reloaded.CHAT_TRANSCRIPT_FILE,
+            ):
+                assert os.path.isabs(path), path
+            assert os.path.isdir(reloaded.DATASET_DIR)
+            assert os.path.isdir(os.path.dirname(reloaded.REPORT_FILE))
+        finally:
+            monkeypatch.undo()
+            importlib.reload(c)
 
     def test_decisions_are_distinct_strings(self):
         decisions = {c.DECISION_S, c.DECISION_C, c.DECISION_N}

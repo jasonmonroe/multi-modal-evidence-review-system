@@ -161,14 +161,7 @@ class TestRunClaimsPipeline:
         assert "100.0%" in out
 
 
-@pytest.mark.xfail(
-    raises=ModuleNotFoundError,
-    strict=True,
-    reason="pipeline imports evaluation.claim_analyzer / evaluation.claim_handler, "
-    "which were moved to agents/ and src/",
-)
-def test_pipeline_imports_resolve(monkeypatch):
-    monkeypatch.delitem(sys.modules, "pipelines.run_claims_pipeline", raising=False)
-    monkeypatch.delitem(sys.modules, "evaluation.claim_analyzer", raising=False)
-    monkeypatch.delitem(sys.modules, "evaluation.claim_handler", raising=False)
-    importlib.import_module("pipelines.run_claims_pipeline")
+def test_pipeline_imports_resolve(clean_imports):
+    module = importlib.import_module("pipelines.run_claims_pipeline")
+    assert module.ClaimAnalyzer.__module__ == "agents.claim_analyzer_agent"
+    assert module.ClaimHandler.__module__ == "src.claim_handler"

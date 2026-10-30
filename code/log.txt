@@ -5095,3 +5095,46 @@ Customer: The package condition. I want the torn-open package reviewed.
 ===============================================================================
 Resolved Risk Flags: claim_mismatch;manual_review_required;non_original_image;text_instruction_present;user_history_risk
 Overridden Claim Status: not_enough_information
+
+===============================================================================
+[2026-10-30 10:46:14] - STAGE: ROW INDEX 0 - INPUT PAYLOAD
+===============================================================================
+User ID: user_002
+Claim Object: car
+Strategy Config: Basic Prompt
+
+--- GENERATED EVIDENCE RULES PROMPT ---
+You must enforce the following strict evidence validation rules per company policy.
+
+If any rule fails, immediately set `evidence_standard_met` to `false`.
+
+2. [RULE: REQ_GENERAL_OBJECT_PART] for claims involving 'general claim review':
+ - MANDATE: The claimed object and relevant part should be visible clearly enough to inspect the claimed condition.
+ - FAILURE CONDITION: If the submitted visual evidence is blurry, obscured, missing from the frame, or taken from an unreadable distance/angle, this requirement is NOT satisfied.
+
+3. [RULE: REQ_GENERAL_MULTI_IMAGE] for claims involving 'multi-image rows':
+ - MANDATE: Each submitted image should be considered separately; at least one relevant image should show the claimed object or part clearly enough to evaluate the claim.
+ - FAILURE CONDITION: If the submitted visual evidence is blurry, obscured, missing from the frame, or taken from an unreadable distance/angle, this requirement is NOT satisfied.
+
+4. [RULE: REQ_CAR_BODY_PANEL] for claims involving 'dent or scratch':
+ - MANDATE: The claimed car panel or bumper should be visible from an angle where surface marks or deformation can be assessed.
+ - FAILURE CONDITION: If the submitted visual evidence is blurry, obscured, missing from the frame, or taken from an unreadable distance/angle, this requirement is NOT satisfied.
+
+5. [RULE: REQ_CAR_GLASS_LIGHT_MIRROR] for claims involving 'crack, broken, or missing part':
+ - MANDATE: The claimed glass, light, mirror, or component should be visible clearly enough to inspect cracks, breakage, or missing parts.
+ - FAILURE CONDITION: If the submitted visual evidence is blurry, obscured, missing from the frame, or taken from an unreadable distance/angle, this requirement is NOT satisfied.
+
+6. [RULE: REQ_CAR_IDENTITY_OR_SIDE] for claims involving 'vehicle identity or orientation':
+ - MANDATE: When the claim depends on vehicle identity, side, or orientation, the image set should show enough context to match the claimed vehicle and part.
+ - FAILURE CONDITION: If the submitted visual evidence is blurry, obscured, missing from the frame, or taken from an unreadable distance/angle, this requirement is NOT satisfied.
+
+7. [RULE: REQ_REVIEW_TRUST] for claims involving 'reviewability':
+ - MANDATE: The submitted images should provide visual evidence that is usable, relevant to the claim, and grounded in the claimed object.
+ - FAILURE CONDITION: If the submitted visual evidence is blurry, obscured, missing from the frame, or taken from an unreadable distance/angle, this requirement is NOT satisfied.
+
+--- CLEANED USER CLAIM TRANSCRIPT ---
+Customer: Morning. I parked near office and later noticed something off in the front.
+Agent: Is this about one part or multiple parts?
+Customer: Two things, I think. The front bumper looks damaged and the left headlight also looks affected.
+Agent: Should we review both as part of this claim?
+Customer: Yes, front bumper and left headlight together.

@@ -10,8 +10,8 @@ from time import sleep
 import openai
 
 # Local Libraries
-from evaluation.claim_analyzer import ClaimAnalyzer
-from evaluation.claim_handler import ClaimHandler
+from agents.claim_analyzer_agent import ClaimAnalyzer
+from src.claim_handler import ClaimHandler
 from src.constants import (
     CSV_HEADERS,
     PAUSE_TIMER,

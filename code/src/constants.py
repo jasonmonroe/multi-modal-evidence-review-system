@@ -5,6 +5,7 @@
 # +---------------------------------------------------------------------------+
 
 import os
+from pathlib import Path
 
 MAX_TOKENS = 4096
 TOKEN_UNIT = 1000
@@ -16,14 +17,19 @@ RISK_FLAG_CNT = 5
 MSEC = 1000
 PEP8_LINE_LEN = 79
 
+# Paths are anchored to this file, not the current working directory, so the
+# system behaves the same whether it is launched from the repo root or code/.
+CODE_DIR = Path(__file__).resolve().parents[1]
+PROJECT_DIR = CODE_DIR.parent
+
 # Dataset files
-DATASET_DIR = "../dataset/"
-CHAT_TRANSCRIPT_FILE = "log.txt"
+DATASET_DIR = str(PROJECT_DIR / "dataset") + "/"
+CHAT_TRANSCRIPT_FILE = str(CODE_DIR / "log.txt")
 CLAIMS_FILE = DATASET_DIR + "claims.csv"
 EVIDENCE_REQ_FILE = DATASET_DIR + "evidence_requirements.csv"
 OUTPUT_FILE = DATASET_DIR + "output.csv"
 TEST_FILE = DATASET_DIR + "test.csv"
-REPORT_FILE = "evaluation/evaluation_report.md"
+REPORT_FILE = str(CODE_DIR / "evaluation" / "evaluation_report.md")
 SAMPLE_CLAIMS_FILE = DATASET_DIR + "sample_claims.csv"
 USER_HISTORY_FILE = DATASET_DIR + "user_history.csv"
 

@@ -26,16 +26,20 @@ __date__ = "2026-07-08"
 __version__ = "1.1.0"
 
 # Python Libraries
-from dotenv import load_dotenv
-from pipelines.run_claims_pipeline import run_claims_pipeline
-
-load_dotenv("../.env")
-
 import sys
 import warnings
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Load .env before importing anything that reads MODEL_* from the environment
+# (src.constants does so at import time). The path is anchored to this file so
+# it works from any working directory.
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 # Local Libraries
 from evaluation.main import run_evaluation_report_pipeline
+from pipelines.run_claims_pipeline import run_claims_pipeline
 from src.data_handler import DataHandler
 from src.image_handler import ImageHandler
 from src.utils import show_banner, show_timer, start_timer

@@ -104,7 +104,7 @@ class TestRunMainPipeline:
 
 class TestScriptEntryPoint:
     def test_main_block_runs_pipeline_and_prints_run_ids(
-        self, legacy_modules, monkeypatch, capsys
+        self, clean_imports, monkeypatch, capsys
     ):
         run_claims = MagicMock()
         fake_modules = {
