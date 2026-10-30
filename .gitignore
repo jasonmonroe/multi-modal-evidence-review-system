@@ -13,3 +13,4 @@ dataset/output.csv
 
 .coverage
 .pytest_cache
+htmlcov
