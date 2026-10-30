@@ -38,11 +38,12 @@ The original task brief, including the full I/O schema and allowed values, is ke
 5. [Running the System](#running-the-system)
 6. [Expected Output](#expected-output)
 7. [Running the Evaluation](#running-the-evaluation)
-8. [Running the Unit Tests](#running-the-unit-tests)
-9. [Input and Output Schema](#input-and-output-schema)
-10. [Cost, Latency, and Rate Limits](#cost-latency-and-rate-limits)
-11. [Troubleshooting](#troubleshooting)
-12. [Roadmap](#roadmap)
+8. [Results](#results)
+9. [Running the Unit Tests](#running-the-unit-tests)
+10. [Input and Output Schema](#input-and-output-schema)
+11. [Cost, Latency, and Rate Limits](#cost-latency-and-rate-limits)
+12. [Troubleshooting](#troubleshooting)
+13. [Limitations and Next Steps](#limitations-and-next-steps)
 
 ---
 
@@ -101,8 +102,7 @@ The original task brief, including the full I/O schema and allowed values, is ke
     ├── claims.csv                    # Inputs only; the rows to predict
     ├── user_history.csv              # Historical claim counts and risk context
     ├── evidence_requirements.csv     # Minimum image evidence requirements
-    ├── output.csv                    # Final predictions (git-ignored)
-    ├── test.csv                      # Where `python main.py` currently writes predictions
+    ├── output.csv                    # Generated predictions (git-ignored)
     └── images/
         ├── sample/                   # Images referenced by sample_claims.csv
         └── test/                     # Images referenced by claims.csv
@@ -237,9 +237,7 @@ python main.py --sample         # Smoke-test the pipeline on the labeled sample 
 python main.py --eval           # Predict on claims.csv, then evaluate on the sample set
 ```
 
-> **Output location:** `TEST_FILE` in [code/src/constants.py](code/src/constants.py) currently points at
-> `dataset/test.csv`, so that is where predictions land. Copy the file to `output.csv`, or change
-> `TEST_FILE` to `OUTPUT_FILE`.
+The predictions are written to `dataset/output.csv`.
 
 ---
 
@@ -254,7 +252,7 @@ A run prints a banner, then per claim the model's response, its latency, and a p
 ⏱ Run Time: 0m 12s 340ms
 ✅️☑️☑️☑️ ...	2.3%
 ...
-# --- ✏️ Writing output to ../dataset/test.csv --- #
+# --- ✏️ Writing output to <repo>/dataset/output.csv --- #
 
 ⏱ Run Time: 9m 41s 120ms
 ----- 🖨️️ END RUN ID: 482913 🖨️️ -----
@@ -310,10 +308,33 @@ Outputs:
 - Console summary of accuracy, tokens, cost, and timing per strategy
 - Operational analysis in [code/evaluation/evaluation_report.md](code/evaluation/evaluation_report.md)
 
-Accuracy is currently measured on `claim_status` only. Per-field accuracy (issue type, object part, severity, risk
-flags) is not yet reported.
+Accuracy is measured on `claim_status`. Each strategy also gets a confusion matrix (actual vs. predicted label), so
+errors can be traced to specific outcomes, and the report compares both against a majority-class baseline.
 
 ---
+
+## Results
+
+Last recorded evaluation on the 20 labeled sample claims (model: `gemini-3.5-flash`). The full report, including
+throughput and pacing, is in [code/evaluation/evaluation_report.md](code/evaluation/evaluation_report.md).
+
+| Strategy                | Correct | Accuracy | Total Time | Avg Latency / Claim | Cost (est) |
+|-------------------------|--------:|---------:|-----------:|--------------------:|-----------:|
+| Basic Prompt            | 10 / 20 |   50.00% |    177.14s |               8.86s |      $0.88 |
+| Chain-of-Thought Prompt | 10 / 20 |   50.00% |    155.84s |               7.79s |      $0.88 |
+
+**Read these numbers with the class balance in mind.** The sample set is 12 `supported`, 5 `contradicted` and 3
+`not_enough_information`, so a model that always answers `supported` scores 60%. Both strategies scored below that
+majority-class baseline, which means the system is not yet adding value over a constant answer on this set. With only
+20 samples each claim moves accuracy by 5 points, so the comparison between strategies is also not statistically
+meaningful.
+
+The next step is error analysis. The evaluation now records a confusion matrix per strategy, which shows whether the
+misses are concentrated on the `contradicted` and `not_enough_information` claims, and that points to the prompt or
+rule-layer changes most likely to help.
+
+---
+
 
 ## Running the Unit Tests
 
@@ -331,8 +352,6 @@ open htmlcov/index.html                                # (macOS) green = covered
 ```
 
 The tests check data types, expected keys, expected results, and inputs that must be rejected or handled safely.
-Tests marked `xfail(strict=True)` document known defects in the source; each turns into a failure once the bug is
-fixed, which is the cue to remove its marker.
 
 ---
 
@@ -374,7 +393,8 @@ Rate-limit handling:
 
 - Requests are paced with a pause between claims (`PAUSE_TIMER`).
 - A `RateLimitError` triggers a back-off pause (`SLEEP_TIMER`) and a retry; each retry adds `SLEEP_TIMER_INC`
-  seconds of extra pacing for the rest of the run.
+  seconds of extra pacing for the rest of the run. After `MAX_RETRIES` failed attempts on one claim (for example,
+  an exhausted quota) the run stops with the error instead of retrying forever.
 - The OpenAI client itself retries transient failures up to 3 times with a 120-second timeout.
 
 These values live in [code/src/constants.py](code/src/constants.py). Cost figures depend on the model and the pricing
@@ -393,12 +413,15 @@ assumed in the report, so treat them as estimates.
 
 ---
 
-## Known Issues and Next Steps
+## Limitations and Next Steps
 
-- Several defects are documented by the `xfail` tests in `code/tests/` (see
-  [Running the Unit Tests](#running-the-unit-tests)); fixing them is the next cleanup.
-- Add response caching so unchanged claims are not sent to the model again.
-- Report per-field accuracy and a confusion matrix, not just `claim_status` accuracy.
+- **Accuracy is below the majority-class baseline** on the sample set (see [Results](#results)); improving it
+  starts with the per-class error analysis.
+- **Small evaluation set.** 20 labeled claims is enough to catch regressions, not to rank strategies.
+- **Only `claim_status` is scored.** Per-field accuracy (issue type, object part, severity, risk flags) is not
+  computed.
+- **Cost is an estimate** based on a flat per-token rate, not the provider's actual pricing.
+- **No response caching.** Re-running re-sends every claim to the model.
 
 ---
 
@@ -410,3 +433,4 @@ assumed in the report, so treat them as estimates.
 ## Author
 
 Jason Monroe — [jason@jasonmonroe.com](mailto:jason@jasonmonroe.com)
+

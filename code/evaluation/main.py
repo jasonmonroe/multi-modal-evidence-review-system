@@ -5,8 +5,13 @@
 # +---------------------------------------------------------------------------+
 
 
+import os
+
 from agents.claim_analyzer_agent import ClaimAnalyzer
 from src.constants import (
+    DECISION_C,
+    DECISION_N,
+    DECISION_S,
     MODEL_NAME,
     PAUSE_TIMER,
     REPORT_FILE,
@@ -25,9 +30,10 @@ def run_evaluation_report_pipeline(
     data_handle: DataHandler, image_handle: ImageHandler
 ) -> None:
     """
-    You write a script (usually in code/evaluation/main.py) that loops through sample_claims.csv, compares your model's
-    predictions to the expected_output columns, and calculates your accuracy. This script should also track how many
-    tokens you use and how long each call takes.
+    Run every prompting strategy over the labeled sample set and compare each
+    predicted `claim_status` with the label. Tracks accuracy, a confusion
+    matrix, tokens, estimated cost and runtime per strategy, then writes the
+    evaluation report.
 
     :param data_handle:
     :param image_handle:
@@ -51,6 +57,13 @@ def run_evaluation_report_pipeline(
     sample_data = data_handle.claims
     sample_data_len = len(sample_data)
 
+    label_column = (
+        "expected_claim_status"
+        if "expected_claim_status" in sample_data.columns
+        else "claim_status"
+    )
+    baseline = _majority_baseline(sample_data, label_column)
+
     results = {}
     strategies = ["Basic Prompt", "Chain-of-Thought Prompt"]
 
@@ -63,6 +76,7 @@ def run_evaluation_report_pipeline(
             "total_tokens": 0,
             "total_cost": 0.0,
             "start_time": start_timer(),
+            "confusion": {},
         }
 
         for idx in range(sample_data_len):
@@ -73,13 +87,14 @@ def run_evaluation_report_pipeline(
 
             response = analyzer.analyze_claim(idx, strategy=strategy)
 
-            # Ensure 'expected_claim_status' is your actual CSV ground truth column
-            ground_truth = sample_data.iloc[idx].get(
-                "expected_claim_status", sample_data.iloc[idx]["claim_status"]
-            )
+            ground_truth = sample_data.iloc[idx][label_column]
 
-            if response["claim_status"] == ground_truth:
+            predicted = response["claim_status"]
+            if predicted == ground_truth:
                 metrics["correct"] += 1
+
+            row = metrics["confusion"].setdefault(ground_truth, {})
+            row[predicted] = row.get(predicted, 0) + 1
 
             # Metric accounting remains standard
             metrics["total_tokens"] += response.get("usage", {}).get("total_tokens", 0)
@@ -93,18 +108,36 @@ def run_evaluation_report_pipeline(
 
     subtitles = []
     for strategy, metric in results.items():
-        subtitles.extend(f"Strategy: {strategy}")
-        subtitles.extend(f"🎯️Accuracy: {metric['accuracy']:.2f}%")
-        subtitles.extend(f"ℹ️Total Time: {metric['duration']:.2f}s")
-        subtitles.extend(f"ℹ️Tokens: {metric['total_tokens']}")
-        subtitles.extend(f"💰️Est Cost: ${metric['total_cost']:.2f}\n")
+        subtitles.append(f"Strategy: {strategy}")
+        subtitles.append(f"🎯️Accuracy: {metric['accuracy']:.2f}%")
+        subtitles.append(f"ℹ️Total Time: {metric['duration']:.2f}s")
+        subtitles.append(f"ℹ️Tokens: {metric['total_tokens']}")
+        subtitles.append(f"💰️Est Cost: ${metric['total_cost']:.2f}")
 
     show_banner("Evaluation Report".upper(), subtitles)
 
     print("# --- Evaluation Workflow Complete --- #")
 
     # Now it's time to generate a report template to be used.
-    generate_report_template(results)
+    generate_report_template(results, baseline=baseline)
+
+
+def _majority_baseline(sample_data, label_column: str) -> dict | None:
+    """
+    Accuracy of a classifier that always predicts the most common label.
+    Returns None for an empty or unlabeled sample set.
+    """
+
+    if label_column not in sample_data.columns or sample_data.empty:
+        return None
+
+    counts = sample_data[label_column].value_counts()
+    return {
+        "label": counts.index[0],
+        "count": int(counts.iloc[0]),
+        "total": len(sample_data),
+        "accuracy": counts.iloc[0] / len(sample_data) * 100,
+    }
 
 
 def _pick_best_strategy(results: dict) -> tuple[str, str]:
@@ -137,14 +170,64 @@ def _pick_best_strategy(results: dict) -> tuple[str, str]:
     return name, f"it had the highest accuracy ({best['accuracy']:.2f}%)"
 
 
-def generate_report_template(results: dict) -> None:
+def _baseline_lines(results: dict, baseline: dict | None) -> list[str]:
+    """Markdown section comparing the best strategy with the majority baseline."""
+
+    if not baseline:
+        return []
+
+    best_accuracy = max((m["accuracy"] for m in results.values()), default=0.0)
+    gap = best_accuracy - baseline["accuracy"]
+
+    if gap > 0:
+        verdict = f"The best strategy beats it by {gap:.2f} percentage points."
+    elif gap == 0:
+        verdict = "The best strategy only matches it."
+    else:
+        verdict = (
+            f"The best strategy scores {best_accuracy:.2f}%, which is "
+            f"{abs(gap):.2f} points below it."
+        )
+
+    return [
+        "## Baseline",
+        f"A majority-class baseline that always answers `{baseline['label']}` "
+        f"scores {baseline['accuracy']:.2f}% ({baseline['count']} of "
+        f"{baseline['total']} claims). {verdict}",
+        "",
+    ]
+
+
+def _confusion_lines(strategy: str, confusion: dict) -> list[str]:
+    """Markdown confusion matrix: actual label per row, predicted per column."""
+
+    labels = [DECISION_S, DECISION_C, DECISION_N]
+    seen = set(confusion) | {p for row in confusion.values() for p in row}
+    labels += sorted(str(l) for l in seen - set(labels))
+
+    lines = [
+        f"### Confusion Matrix: {strategy}",
+        "| Actual \\ Predicted | " + " | ".join(labels) + " |",
+        "| :--- | " + " | ".join("---:" for _ in labels) + " |",
+    ]
+    for actual in labels:
+        row = confusion.get(actual, {})
+        lines.append(
+            f"| {actual} | " + " | ".join(str(row.get(p, 0)) for p in labels) + " |"
+        )
+    lines.append("")
+    return lines
+
+
+def generate_report_template(results: dict, baseline: dict | None = None) -> None:
     """
     Generates the operational evaluation report and writes it to REPORT_FILE
     as Markdown.
 
     :param results: strategy name -> metrics dict, as built by
         run_evaluation_report_pipeline (accuracy, correct, total, duration,
-        total_tokens, total_cost).
+        total_tokens, total_cost and optionally confusion).
+    :param baseline: majority-class baseline from _majority_baseline, if known.
     :return:
     """
 
@@ -162,10 +245,9 @@ def generate_report_template(results: dict) -> None:
         avg_latency = metrics["duration"] / total if total else 0.0
 
         strategy_rows.append(
-            f"| {strategy} | {total} | {metrics['correct']} "
+            f"| {strategy} | {metrics['correct']} / {total} "
             f"| {metrics['accuracy']:.2f}% | {metrics['duration']:.2f}s "
-            f"| {avg_latency:.2f}s | {metrics['total_tokens']:,} "
-            f"| ${metrics['total_cost']:.2f} |"
+            f"| {avg_latency:.2f}s | ${metrics['total_cost']:.2f} |"
         )
         sample_count = max(sample_count, total)
         calls += total
@@ -183,17 +265,24 @@ def generate_report_template(results: dict) -> None:
     else:
         choice = "No strategies were evaluated."
 
+    confusion_lines = []
+    for strategy, metrics in results.items():
+        if metrics.get("confusion"):
+            confusion_lines += _confusion_lines(strategy, metrics["confusion"])
+
     lines = [
         "# Operational Evaluation Report",
         "",
-        f"Evaluated on `{SAMPLE_CLAIMS_FILE}` ({sample_count} labeled claims).",
+        f"Evaluated on `{os.path.basename(SAMPLE_CLAIMS_FILE)}` ({sample_count} labeled claims).",
         "Accuracy is the share of rows where the predicted `claim_status` matches the label.",
         "",
-        "### Strategy Comparison",
-        "| Strategy | Samples | Correct | Accuracy | Total Time | Avg Latency / Claim | Tokens | Cost (est) |",
-        "| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "## Strategy Comparison",
+        "| Strategy | Correct | Accuracy | Total Time | Avg Latency / Claim | Cost (est) |",
+        "| :--- | ---: | ---: | ---: | ---: | ---: |",
         *strategy_rows,
         "",
+        *_baseline_lines(results, baseline),
+        *confusion_lines,
         "## Operational Analysis",
         f"- **Model Used:** {MODEL_NAME}",
         f"- **Model Calls:** {calls}",

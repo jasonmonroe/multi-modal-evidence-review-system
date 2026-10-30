@@ -237,13 +237,13 @@ class ClaimAnalyzer:
         if "non_original_image" in risk_flags:
             valid_image = False
 
-        # Override 5: Severity safety valve
-        if claim_status == DECISION_N and severity not in ["none", "unknown"]:
-            severity = "unknown"
-
         # Override 6: Minimum evidence standards
         if not evidence_standard_met:
             claim_status = DECISION_N
+
+        # Override 5: Severity safety valve
+        if claim_status == DECISION_N and severity not in ["none", "unknown"]:
+            severity = "unknown"
 
         # Format risk flags back to expected CSV format
         final_risk_flags = ";".join(sorted(risk_flags)) if risk_flags else "none"

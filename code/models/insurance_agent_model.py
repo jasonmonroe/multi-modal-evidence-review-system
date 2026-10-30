@@ -32,12 +32,7 @@ class InsuranceAgentModel:
 
     def __init__(self, row_total: int = 0):
         self.name = "Insurance Agent Adjuster Model"
-
-        if MODEL_API_URL is None or MODEL_NAME is None or MODEL_API_KEY is None:
-            print("⚠️ Credentials aren't properly being read. Check .env file. ⚠️")
-            return
-
-        self._client = self._init_llm_model(row_total)
+        self._client = None
         self.usage = UsageTracker()
         self._user_id = ""
         self._claim_object = ""
@@ -45,6 +40,12 @@ class InsuranceAgentModel:
         self._images = []
         self._image_filenames = []  # Store actual image filenames
         self._evidence = ""
+
+        if MODEL_API_URL is None or MODEL_NAME is None or MODEL_API_KEY is None:
+            print("⚠️ Credentials aren't properly being read. Check .env file. ⚠️")
+            return
+
+        self._client = self._init_llm_model(row_total)
 
     def _init_llm_model(self, row_total: int) -> OpenAI | None:
 
@@ -149,11 +150,11 @@ class InsuranceAgentModel:
     def _filter_response(self, response: ChatCompletion, prompt: str) -> dict:
         # Extrapolate response
         # model: str, input_tokens: int, output_tokens: int, prompt: str
-        if hasattr(response, "usage"):
-            usage = response.usage
+        usage = getattr(response, "usage", None)
+        if usage is not None:
             self.usage.record(
                 model=response.model,
-                input_tokens=usage.prompt_token,
+                input_tokens=usage.prompt_tokens,
                 output_tokens=usage.completion_tokens,
                 prompt=prompt,
                 response_id=response.id,
@@ -170,8 +171,8 @@ class InsuranceAgentModel:
             print(f"❌ Error occurred while parsing response: {e}")
             return {}
 
-        if response.usage:
-            content["usage"] = response.usage.model_dump()
+        if usage is not None:
+            content["usage"] = usage.model_dump()
 
         return content
 

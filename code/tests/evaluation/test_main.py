@@ -35,7 +35,7 @@ class TestGenerateReportTemplate:
         text = report.read_text()
         assert text.startswith("# Operational Evaluation Report")
         for heading in (
-            "### Strategy Comparison",
+            "## Strategy Comparison",
             "## Operational Analysis",
             "## Final Strategy Choice",
         ):
@@ -46,8 +46,8 @@ class TestGenerateReportTemplate:
             {"Basic Prompt": metrics(), "Chain-of-Thought Prompt": metrics(accuracy=75)}
         )
         text = report.read_text()
-        assert "| Basic Prompt | 2 | 1 | 50.00% | 2.50s | 1.25s | 1,500 | $0.01 |" in text
-        assert "| Chain-of-Thought Prompt | 2 | 1 | 75.00% | 2.50s | 1.25s | 1,500 | $0.01 |" in text
+        assert "| Basic Prompt | 1 / 2 | 50.00% | 2.50s | 1.25s | $0.01 |" in text
+        assert "| Chain-of-Thought Prompt | 1 / 2 | 75.00% | 2.50s | 1.25s | $0.01 |" in text
 
     def test_no_layout_indentation_leaks_into_markdown(self, report):
         ev.generate_report_template(
@@ -143,6 +143,74 @@ class TestGenerateReportTemplate:
         assert "old" not in report.read_text()
 
 
+BASELINE = {"label": "supported", "count": 12, "total": 20, "accuracy": 60.0}
+
+
+class TestBaselineSection:
+    @pytest.fixture
+    def report(self, tmp_path, monkeypatch):
+        path = tmp_path / "report.md"
+        monkeypatch.setattr(ev, "REPORT_FILE", str(path))
+        return path
+
+    def test_below_baseline_is_stated_plainly(self, report):
+        ev.generate_report_template({"A": metrics(accuracy=50.0)}, baseline=BASELINE)
+        text = report.read_text()
+        assert "## Baseline" in text
+        assert "always answers `supported` scores 60.00% (12 of 20 claims)" in text
+        assert "50.00%, which is 10.00 points below it" in text
+
+    def test_above_baseline(self, report):
+        ev.generate_report_template({"A": metrics(accuracy=75.0)}, baseline=BASELINE)
+        assert "beats it by 15.00 percentage points" in report.read_text()
+
+    def test_equal_to_baseline(self, report):
+        ev.generate_report_template({"A": metrics(accuracy=60.0)}, baseline=BASELINE)
+        assert "only matches it" in report.read_text()
+
+    def test_no_baseline_no_section(self, report):
+        ev.generate_report_template({"A": metrics()})
+        assert "## Baseline" not in report.read_text()
+
+
+class TestMajorityBaseline:
+    def test_computes_majority_label(self):
+        df = pd.DataFrame({"claim_status": ["supported"] * 3 + ["contradicted"]})
+        out = ev._majority_baseline(df, "claim_status")
+        assert out == {"label": "supported", "count": 3, "total": 4, "accuracy": 75.0}
+
+    def test_empty_frame(self):
+        assert ev._majority_baseline(pd.DataFrame({"claim_status": []}), "claim_status") is None
+
+    def test_missing_column(self):
+        assert ev._majority_baseline(pd.DataFrame({"x": [1]}), "claim_status") is None
+
+
+class TestConfusionSection:
+    @pytest.fixture
+    def report(self, tmp_path, monkeypatch):
+        path = tmp_path / "report.md"
+        monkeypatch.setattr(ev, "REPORT_FILE", str(path))
+        return path
+
+    def test_matrix_rendered_per_strategy(self, report):
+        confusion = {"supported": {"supported": 3, "contradicted": 1}, "contradicted": {"supported": 2}}
+        ev.generate_report_template({"A": metrics(confusion=confusion)})
+        text = report.read_text()
+        assert "### Confusion Matrix: A" in text
+        assert "| supported | 3 | 1 | 0 |" in text
+        assert "| contradicted | 2 | 0 | 0 |" in text
+        assert "| not_enough_information | 0 | 0 | 0 |" in text
+
+    def test_unexpected_label_gets_its_own_column(self, report):
+        ev.generate_report_template({"A": metrics(confusion={"supported": {None: 2}})})
+        assert "None" in report.read_text()
+
+    def test_omitted_without_confusion_data(self, report):
+        ev.generate_report_template({"A": metrics()})
+        assert "Confusion Matrix" not in report.read_text()
+
+
 class FakeAnalyzer:
     """Returns canned decisions in order; records how it was called."""
 
@@ -206,6 +274,13 @@ class TestRunEvaluationReportPipeline:
         assert basic["duration"] >= 0
         assert isinstance(basic["accuracy"], float)
 
+    def test_confusion_matrix_and_baseline_are_collected(self, env):
+        ev.run_evaluation_report_pipeline(env.data, MagicMock())
+        basic = env.report.call_args.args[0]["Basic Prompt"]
+        assert basic["confusion"] == {"supported": {"supported": 1, "contradicted": 1}}
+        baseline = env.report.call_args.kwargs["baseline"]
+        assert baseline["label"] == "supported" and baseline["accuracy"] == 100.0
+
     def test_prefers_expected_claim_status_column(self, env):
         env.data.claims = pd.DataFrame(
             {
@@ -231,20 +306,11 @@ class TestRunEvaluationReportPipeline:
         ev.run_evaluation_report_pipeline(env.data, MagicMock())
         assert env.report.call_args.args[0]["Basic Prompt"]["total_tokens"] == 0
 
-    @pytest.mark.xfail(
-        raises=KeyError,
-        strict=True,
-        reason="get(..., default) eagerly evaluates ['claim_status'] even when "
-        "only expected_claim_status exists",
-    )
     def test_works_with_only_expected_claim_status_column(self, env):
         env.data.claims = pd.DataFrame({"expected_claim_status": ["supported", "supported"]})
         ev.run_evaluation_report_pipeline(env.data, MagicMock())
+        assert env.report.call_args.args[0]["Basic Prompt"]["accuracy"] == 50.0
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="subtitles.extend(str) adds one character per list item",
-    )
     def test_summary_subtitles_are_whole_lines(self, env):
         ev.run_evaluation_report_pipeline(env.data, MagicMock())
         subtitles = env.banner.call_args_list[-1].args[1]

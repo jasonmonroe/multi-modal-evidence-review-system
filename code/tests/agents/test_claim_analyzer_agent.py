@@ -376,11 +376,6 @@ class TestMakeDecision:
         )
         assert out["claim_status"] == DECISION_N
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="severity reset runs before the evidence override, so a claim "
-        "downgraded to not_enough_information keeps its concrete severity",
-    )
     def test_downgraded_claim_has_unknown_severity(self, analyzer):
         out = self.decide(analyzer, evidence_standard_met=False, severity="high")
         assert out["severity"] == "unknown"

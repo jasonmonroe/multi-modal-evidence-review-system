@@ -11,6 +11,7 @@ import pytest
 import src.claim_handler as claim_handler_mod
 from src.constants import (
     CSV_HEADERS,
+    MAX_RETRIES,
     PAUSE_TIMER,
     SLEEP_TIMER,
     SLEEP_TIMER_INC,
@@ -64,8 +65,8 @@ class FakeAnalyzer:
 
 @pytest.fixture
 def harness(pipeline_module, monkeypatch, tmp_path, claims_df):
-    out_file = tmp_path / "test.csv"
-    monkeypatch.setattr(claim_handler_mod, "TEST_FILE", str(out_file))
+    out_file = tmp_path / "output.csv"
+    monkeypatch.setattr(claim_handler_mod, "OUTPUT_FILE", str(out_file))
 
     sleeps = []
     monkeypatch.setattr(pipeline_module, "sleep", sleeps.append)
@@ -141,6 +142,21 @@ class TestRunClaimsPipeline:
             PAUSE_TIMER + extra,  # pacing now includes the extra time
             PAUSE_TIMER + extra,
         ]
+
+    def test_gives_up_after_max_retries(self, harness):
+        harness.holder["effects"] = [rate_limit_error() for _ in range(MAX_RETRIES + 1)]
+        with pytest.raises(openai.RateLimitError):
+            harness.mod.run_claims_pipeline(harness.data, MagicMock())
+        assert len(harness.holder["analyzer"].calls) == MAX_RETRIES + 1
+        assert harness.sleeps == [SLEEP_TIMER] * MAX_RETRIES  # no sleep after giving up
+        assert not harness.out.exists()
+
+    def test_retry_budget_resets_for_each_row(self, harness):
+        # MAX_RETRIES failures on every row is allowed; only exceeding it aborts
+        err = [rate_limit_error() for _ in range(MAX_RETRIES)]
+        harness.holder["effects"] = err + [result_for(0)] + list(err) + [result_for(1)]
+        harness.mod.run_claims_pipeline(harness.data, MagicMock())
+        assert len(read_rows(harness.out)) == 3
 
     def test_non_rate_limit_errors_propagate(self, harness):
         harness.holder["effects"] = [ValueError("bad row")]

@@ -63,10 +63,10 @@ class UsageTracker:
         }
 
         # Record prompt ID's and min/max token usage
-        if total_tokens <= min(usage.least["tokens"], total_tokens):
+        if usage.calls == 0 or total_tokens <= usage.least["tokens"]:
             usage.least = token_data
 
-        if total_tokens >= max(usage.most["tokens"], total_tokens):
+        if usage.calls == 0 or total_tokens >= usage.most["tokens"]:
             usage.most = token_data
 
         # Update the input and output tokens

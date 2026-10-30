@@ -8,7 +8,7 @@
 import csv
 
 # Local Libraries
-from src.constants import TEST_FILE
+from src.constants import OUTPUT_FILE
 
 
 class ClaimHandler:
@@ -47,7 +47,7 @@ class ClaimHandler:
 
     def _format_values_for_output(self) -> None:
         # Format values for output
-        if "\n" in self.user_claim:
+        if isinstance(self.user_claim, str) and "\n" in self.user_claim:
             self.user_claim = self.user_claim.replace("\n", " | ").strip()
 
         if isinstance(self.image_paths, list):
@@ -117,8 +117,8 @@ class ClaimHandler:
         :param csv_rows:
         :return:
         """
-        print(f"\n# --- ✏️ Writing output to {TEST_FILE} --- #\n")
+        print(f"\n# --- ✏️ Writing output to {OUTPUT_FILE} --- #\n")
 
-        with open(TEST_FILE, "w", newline="", encoding="utf-8") as csv_file:
+        with open(OUTPUT_FILE, "w", newline="", encoding="utf-8") as csv_file:
             writer = csv.writer(csv_file)
             writer.writerows(csv_rows)

@@ -14,6 +14,7 @@ from agents.claim_analyzer_agent import ClaimAnalyzer
 from src.claim_handler import ClaimHandler
 from src.constants import (
     CSV_HEADERS,
+    MAX_RETRIES,
     PAUSE_TIMER,
     SLEEP_TIMER,
     SLEEP_TIMER_INC,
@@ -38,6 +39,7 @@ def run_claims_pipeline(data_handle: DataHandler, image_handle: ImageHandler) ->
     for idx, row in enumerate(analyzer.data.claims.itertuples()):
         print(f"\n# --- Claim analysis for row {idx + 1} of {csv_row_cnt} begins --- #")
 
+        retries = 0
         while True:
             try:
                 # Analyzing claim and get final dataset.
@@ -45,6 +47,10 @@ def run_claims_pipeline(data_handle: DataHandler, image_handle: ImageHandler) ->
                 break  # Success! Break the retry loop and move forward
 
             except openai.RateLimitError as e:
+                retries += 1
+                if retries > MAX_RETRIES:
+                    print(f"❌ Giving up on row {idx + 1} after {MAX_RETRIES} retries.")
+                    raise
                 print(f"{e}")
                 print(
                     f"\n⚠️ Hit Token Quota Limit! Pausing pipeline for {SLEEP_TIMER} seconds for another attempt..."

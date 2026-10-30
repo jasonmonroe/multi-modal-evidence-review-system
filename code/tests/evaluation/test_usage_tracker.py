@@ -78,10 +78,6 @@ class TestUsageTracker:
         assert usage.calls == 1 and usage.total_tokens == 0
         assert usage.least["tokens"] == 0
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="a first call above MAX_TOKENS*2 never replaces the default `least`",
-    )
     def test_oversized_first_call_is_recorded_as_least(self):
         t = UsageTracker()
         t.record("m", MAX_TOKENS * 3, 0, "huge", "r1")

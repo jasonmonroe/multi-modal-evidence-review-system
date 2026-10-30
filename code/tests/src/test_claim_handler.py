@@ -109,9 +109,6 @@ class TestFormatValuesForOutput:
         assert h.evidence_standard_met == 1
         assert h.valid_image is None
 
-    @pytest.mark.xfail(
-        raises=TypeError, strict=True, reason="user_claim=None is not guarded"
-    )
     def test_missing_user_claim_does_not_crash(self):
         ClaimHandler()._format_values_for_output()
 
@@ -187,7 +184,7 @@ class TestProgress:
 class TestWriteOutput:
     def test_roundtrips_rows_with_commas_and_newlines(self, tmp_path, monkeypatch):
         target = tmp_path / "out.csv"
-        monkeypatch.setattr(ch, "TEST_FILE", str(target))
+        monkeypatch.setattr(ch, "OUTPUT_FILE", str(target))
         rows = [list(CSV_HEADERS), ["a,b", 'say "hi"', "line1\nline2"] + [""] * 11]
 
         ClaimHandler().write_output(rows)
@@ -198,18 +195,18 @@ class TestWriteOutput:
     def test_overwrites_existing_file(self, tmp_path, monkeypatch):
         target = tmp_path / "out.csv"
         target.write_text("stale,data\n")
-        monkeypatch.setattr(ch, "TEST_FILE", str(target))
+        monkeypatch.setattr(ch, "OUTPUT_FILE", str(target))
         ClaimHandler().write_output([["h"], ["v"]])
         assert target.read_text().splitlines() == ["h", "v"]
 
     def test_empty_rows_creates_empty_file(self, tmp_path, monkeypatch):
         target = tmp_path / "out.csv"
-        monkeypatch.setattr(ch, "TEST_FILE", str(target))
+        monkeypatch.setattr(ch, "OUTPUT_FILE", str(target))
         ClaimHandler().write_output([])
         assert target.read_text() == ""
 
     def test_announces_target(self, tmp_path, monkeypatch, capsys):
         target = tmp_path / "out.csv"
-        monkeypatch.setattr(ch, "TEST_FILE", str(target))
+        monkeypatch.setattr(ch, "OUTPUT_FILE", str(target))
         ClaimHandler().write_output([])
         assert str(target) in capsys.readouterr().out

@@ -39,15 +39,14 @@ def model(real_model):
 
 
 def completion(content='{"claim_status": "supported"}', usage=True, model_name="test-model"):
-    """Chat completion stand-in. `prompt_token` mirrors the attribute the
-    source reads (see the xfail test for the real field name)."""
+    """Chat completion stand-in."""
     resp = MagicMock()
     resp.id = "resp_1"
     resp.model = model_name
     resp.choices = [MagicMock()]
     resp.choices[0].message.content = content
     if usage:
-        resp.usage.prompt_token = 11
+        resp.usage.prompt_tokens = 11
         resp.usage.completion_tokens = 5
         resp.usage.model_dump.return_value = {"total_tokens": 16}
     else:
@@ -84,13 +83,8 @@ class TestInit:
         m = iam.InsuranceAgentModel()
         assert "Credentials" in capsys.readouterr().out
         openai_cls.assert_not_called()
-        assert not hasattr(m, "_client")
+        assert m._client is None
 
-    @pytest.mark.xfail(
-        raises=AttributeError,
-        strict=True,
-        reason="__init__ returns before setting _client, so get_response crashes",
-    )
     def test_get_response_without_credentials_returns_empty(
         self, creds, openai_cls, monkeypatch
     ):
@@ -283,11 +277,11 @@ class TestFilterResponse:
         assert out["valid_image"] is True
         assert isinstance(out["supporting_image_ids"], str)
 
-    @pytest.mark.xfail(
-        raises=AttributeError,
-        strict=True,
-        reason="reads usage.prompt_token; the OpenAI field is prompt_tokens",
-    )
+    def test_missing_usage_is_tolerated(self, model):
+        out = model._filter_response(completion(usage=False), "p")
+        assert out == {"claim_status": "supported"}
+        model.usage.record.assert_not_called()
+
     def test_real_openai_usage_shape(self, real_model):
         model = real_model
         usage = types.SimpleNamespace(

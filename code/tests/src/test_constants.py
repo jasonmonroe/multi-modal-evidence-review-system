@@ -15,6 +15,7 @@ class TestScalarConstants:
             "PAUSE_TIMER",
             "SLEEP_TIMER",
             "SLEEP_TIMER_INC",
+            "MAX_RETRIES",
             "MSEC",
             "PEP8_LINE_LEN",
         ):
@@ -35,7 +36,6 @@ class TestScalarConstants:
             (c.EVIDENCE_REQ_FILE, "evidence_requirements.csv"),
             (c.USER_HISTORY_FILE, "user_history.csv"),
             (c.OUTPUT_FILE, "output.csv"),
-            (c.TEST_FILE, "test.csv"),
         ):
             assert isinstance(path, str)
             assert path.startswith(c.DATASET_DIR)
@@ -50,7 +50,7 @@ class TestScalarConstants:
             for path in (
                 reloaded.DATASET_DIR,
                 reloaded.CLAIMS_FILE,
-                reloaded.TEST_FILE,
+                reloaded.OUTPUT_FILE,
                 reloaded.REPORT_FILE,
                 reloaded.CHAT_TRANSCRIPT_FILE,
             ):
