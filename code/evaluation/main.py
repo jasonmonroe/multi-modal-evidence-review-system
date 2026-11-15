@@ -19,6 +19,9 @@ from src.constants import (
     SECS_IN_MIN,
     SLEEP_TIMER,
     SLEEP_TIMER_INC,
+    INPUT_PRICE_PER_UNIT,
+    OUTPUT_PRICE_PER_UNIT,
+    PRICING_MODEL,
     TOKEN_UNIT,
 )
 from src.data_handler import DataHandler
@@ -74,6 +77,8 @@ def run_evaluation_report_pipeline(
             "correct": 0,
             "total": sample_data_len,
             "total_tokens": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
             "total_cost": 0.0,
             "start_time": start_timer(),
             "confusion": {},
@@ -97,8 +102,13 @@ def run_evaluation_report_pipeline(
             row[predicted] = row.get(predicted, 0) + 1
 
             # Metric accounting remains standard
-            metrics["total_tokens"] += response.get("usage", {}).get("total_tokens", 0)
-            metrics["total_cost"] = (metrics["total_tokens"] / TOKEN_UNIT) * 0.01
+            usage = response.get("usage", {})
+            metrics["total_tokens"] += usage.get("total_tokens", 0)
+            metrics["input_tokens"] += usage.get("prompt_tokens", 0)
+            metrics["output_tokens"] += usage.get("completion_tokens", 0)
+            metrics["total_cost"] = _token_cost(
+                metrics["input_tokens"], metrics["output_tokens"]
+            )
 
         metrics["duration"] = start_timer() - metrics["start_time"]
         metrics["accuracy"] = (
@@ -112,7 +122,7 @@ def run_evaluation_report_pipeline(
         subtitles.append(f"🎯️Accuracy: {metric['accuracy']:.2f}%")
         subtitles.append(f"ℹ️Total Time: {metric['duration']:.2f}s")
         subtitles.append(f"ℹ️Tokens: {metric['total_tokens']}")
-        subtitles.append(f"💰️Est Cost: ${metric['total_cost']:.2f}")
+        subtitles.append(f"💰️Est Cost: {_format_cost(*_cost_range(metric))}")
 
     show_banner("Evaluation Report".upper(), subtitles)
 
@@ -120,6 +130,33 @@ def run_evaluation_report_pipeline(
 
     # Now it's time to generate a report template to be used.
     generate_report_template(results, baseline=baseline)
+
+
+def _token_cost(input_tokens: int, output_tokens: int) -> float:
+    """Dollar cost of a call, pricing input and output tokens separately."""
+    return (
+        input_tokens * INPUT_PRICE_PER_UNIT + output_tokens * OUTPUT_PRICE_PER_UNIT
+    ) / TOKEN_UNIT
+
+
+def _cost_range(metrics: dict) -> tuple[float, float]:
+    """
+    (low, high) cost for one strategy. Exact when the input/output split was
+    recorded; otherwise bounded by pricing every token as input (low) or as
+    output (high), because the split is unknown.
+    """
+    if "input_tokens" in metrics and "output_tokens" in metrics:
+        cost = _token_cost(metrics["input_tokens"], metrics["output_tokens"])
+        return cost, cost
+
+    total = metrics["total_tokens"]
+    return _token_cost(total, 0), _token_cost(0, total)
+
+
+def _format_cost(low: float, high: float) -> str:
+    if round(low, 2) == round(high, 2):
+        return f"${low:.2f}"
+    return f"${low:.2f} to ${high:.2f}"
 
 
 def _majority_baseline(sample_data, label_column: str) -> dict | None:
@@ -146,9 +183,12 @@ def _pick_best_strategy(results: dict) -> tuple[str, str]:
     shortest runtime. Returns the strategy name and a one-sentence reason.
     """
 
+    def cost(m: dict) -> float:
+        return sum(_cost_range(m)) / 2
+
     def rank(item: tuple) -> tuple:
         _, m = item
-        return m["accuracy"], -m["total_cost"], -m["duration"]
+        return m["accuracy"], -cost(m), -m["duration"]
 
     name, best = max(results.items(), key=rank)
     others = [m for n, m in results.items() if n != name]
@@ -157,14 +197,14 @@ def _pick_best_strategy(results: dict) -> tuple[str, str]:
         return name, f"it was the only strategy evaluated ({best['accuracy']:.2f}% accuracy)"
 
     if all(o["accuracy"] == best["accuracy"] for o in others):
-        if all(o["total_cost"] == best["total_cost"] for o in others):
+        if all(cost(o) == cost(best) for o in others):
             return name, (
                 f"accuracy ({best['accuracy']:.2f}%) and cost were tied, and it "
                 f"had the shortest runtime ({best['duration']:.2f}s)"
             )
         return name, (
             f"accuracy was tied at {best['accuracy']:.2f}%, and it had the "
-            f"lowest estimated cost (${best['total_cost']:.2f})"
+            f"lowest estimated cost ({_format_cost(*_cost_range(best))})"
         )
 
     return name, f"it had the highest accuracy ({best['accuracy']:.2f}%)"
@@ -237,22 +277,31 @@ def generate_report_template(results: dict, baseline: dict | None = None) -> Non
     sample_count = 0
     calls = 0
     total_tokens_sum = 0
-    total_cost_sum = 0.0
+    cost_low = cost_high = 0.0
+    input_sum = output_sum = 0
+    split_known = True
     total_duration = 0.0
 
     for strategy, metrics in results.items():
         total = metrics["total"]
         avg_latency = metrics["duration"] / total if total else 0.0
 
+        low, high = _cost_range(metrics)
         strategy_rows.append(
             f"| {strategy} | {metrics['correct']} / {total} "
             f"| {metrics['accuracy']:.2f}% | {metrics['duration']:.2f}s "
-            f"| {avg_latency:.2f}s | ${metrics['total_cost']:.2f} |"
+            f"| {avg_latency:.2f}s | {_format_cost(low, high)} |"
         )
         sample_count = max(sample_count, total)
         calls += total
         total_tokens_sum += metrics["total_tokens"]
-        total_cost_sum += metrics["total_cost"]
+        cost_low += low
+        cost_high += high
+        if "input_tokens" in metrics and "output_tokens" in metrics:
+            input_sum += metrics["input_tokens"]
+            output_sum += metrics["output_tokens"]
+        else:
+            split_known = False
         total_duration += metrics["duration"]
 
     minutes = total_duration / SECS_IN_MIN
@@ -286,9 +335,25 @@ def generate_report_template(results: dict, baseline: dict | None = None) -> Non
         "## Operational Analysis",
         f"- **Model Used:** {MODEL_NAME}",
         f"- **Model Calls:** {calls}",
-        f"- **Total Token Usage:** {total_tokens_sum:,}",
-        f"- **Approximate Cost:** ${total_cost_sum:.2f} "
-        f"(assumes a flat $0.01 per {TOKEN_UNIT:,} tokens)",
+        f"- **Total Token Usage:** {total_tokens_sum:,}"
+        + (
+            f" ({input_sum:,} input, {output_sum:,} output)"
+            if split_known and results
+            else ""
+        ),
+        f"- **Approximate Cost:** {_format_cost(cost_low, cost_high)}",
+        f"- **Pricing Assumption:** {PRICING_MODEL} at "
+        f"${INPUT_PRICE_PER_UNIT:.2f} per 1M input tokens and "
+        f"${OUTPUT_PRICE_PER_UNIT:.2f} per 1M output tokens, as reported by "
+        "third-party price trackers (Google's pricing page does not currently "
+        "list this model; verify before budgeting)."
+        + (
+            ""
+            if split_known
+            else " This run did not record the input/output token split, so "
+            "cost is shown as a range: all tokens priced as input (low) to "
+            "all priced as output (high)."
+        ),
         f"- **Throughput:** about {rpm:.1f} requests/min and {tpm:,.0f} tokens/min",
         f"- **Pacing and Retries:** {PAUSE_TIMER}s pause between claims; on a "
         f"rate-limit error the pipeline waits {SLEEP_TIMER}s and retries, "

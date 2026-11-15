@@ -61,6 +61,13 @@ class TestScalarConstants:
             monkeypatch.undo()
             importlib.reload(c)
 
+    def test_pricing_constants(self):
+        assert c.TOKEN_UNIT == 1_000_000
+        assert isinstance(c.PRICING_MODEL, str) and c.PRICING_MODEL
+        for price in (c.INPUT_PRICE_PER_UNIT, c.OUTPUT_PRICE_PER_UNIT):
+            assert isinstance(price, float) and price > 0
+        assert c.OUTPUT_PRICE_PER_UNIT > c.INPUT_PRICE_PER_UNIT
+
     def test_decisions_are_distinct_strings(self):
         decisions = {c.DECISION_S, c.DECISION_C, c.DECISION_N}
         assert decisions == {"supported", "contradicted", "not_enough_information"}

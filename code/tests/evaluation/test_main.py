@@ -14,7 +14,9 @@ def metrics(**over):
         "correct": 1,
         "total": 2,
         "total_tokens": 1500,
-        "total_cost": 0.015,
+        "input_tokens": 1000,
+        "output_tokens": 500,
+        "total_cost": 0.006,
         "duration": 2.5,
         "accuracy": 50.0,
     }
@@ -97,7 +99,7 @@ class TestGenerateReportTemplate:
 
     def test_choice_breaks_accuracy_tie_on_cost(self, report):
         ev.generate_report_template(
-            {"A": metrics(total_cost=2.0), "B": metrics(total_cost=1.0)}
+            {"A": metrics(output_tokens=900_000), "B": metrics(output_tokens=100_000)}
         )
         text = report.read_text()
         assert "We chose **B**" in text and "lowest estimated cost" in text
@@ -118,12 +120,16 @@ class TestGenerateReportTemplate:
 
     def test_token_and_cost_totals(self, report):
         ev.generate_report_template(
-            {"A": metrics(total_tokens=1500, total_cost=1.0), "B": metrics(total_tokens=2500, total_cost=0.5)}
+            {
+                "A": metrics(total_tokens=2_000_000, input_tokens=1_000_000, output_tokens=1_000_000),
+                "B": metrics(total_tokens=1_000_000, input_tokens=1_000_000, output_tokens=0),
+            }
         )
         text = report.read_text()
-        assert "**Total Token Usage:** 4,000" in text
-        assert "**Approximate Cost:** $1.50" in text
-        assert "flat $0.01 per 1,000 tokens" in text
+        assert "**Total Token Usage:** 3,000,000 (2,000,000 input, 1,000,000 output)" in text
+        # A: 1.50 + 9.00; B: 1.50
+        assert "**Approximate Cost:** $12.00" in text
+        assert "$10.50 |" in text and "$1.50 |" in text
         assert "**Model Used:** test-model" in text
 
     def test_empty_results_still_writes_zero_totals(self, report):
@@ -144,6 +150,48 @@ class TestGenerateReportTemplate:
 
 
 BASELINE = {"label": "supported", "count": 12, "total": 20, "accuracy": 60.0}
+
+
+class TestCostModel:
+    def test_token_cost_prices_input_and_output_separately(self):
+        assert ev._token_cost(1_000_000, 0) == pytest.approx(1.50)
+        assert ev._token_cost(0, 1_000_000) == pytest.approx(9.00)
+        assert ev._token_cost(0, 0) == 0
+
+    def test_exact_range_when_split_recorded(self):
+        low, high = ev._cost_range(metrics(input_tokens=1_000_000, output_tokens=0))
+        assert low == high == pytest.approx(1.50)
+
+    def test_bounded_range_when_split_missing(self):
+        low, high = ev._cost_range({"total_tokens": 1_000_000})
+        assert low == pytest.approx(1.50) and high == pytest.approx(9.00)
+        assert low < high
+
+    @pytest.mark.parametrize(
+        "low,high,expected",
+        [(1.0, 1.0, "$1.00"), (1.001, 1.004, "$1.00"), (0.27, 1.59, "$0.27 to $1.59")],
+    )
+    def test_format_cost(self, low, high, expected):
+        assert ev._format_cost(low, high) == expected
+
+    def test_legacy_metrics_report_a_range_and_say_why(self, tmp_path, monkeypatch):
+        path = tmp_path / "r.md"
+        monkeypatch.setattr(ev, "REPORT_FILE", str(path))
+        legacy = {k: v for k, v in metrics().items() if k not in ("input_tokens", "output_tokens")}
+        legacy["total_tokens"] = 1_000_000
+        ev.generate_report_template({"A": legacy})
+        text = path.read_text()
+        assert "$1.50 to $9.00" in text
+        assert "did not record the input/output token split" in text
+
+    def test_pricing_assumption_is_stated_with_provenance(self, tmp_path, monkeypatch):
+        path = tmp_path / "r.md"
+        monkeypatch.setattr(ev, "REPORT_FILE", str(path))
+        ev.generate_report_template({"A": metrics()})
+        text = path.read_text()
+        assert "gemini-3.5-flash at $1.50 per 1M input tokens and $9.00 per 1M output tokens" in text
+        assert "third-party" in text
+        assert "flat" not in text
 
 
 class TestBaselineSection:
@@ -225,7 +273,11 @@ class FakeAnalyzer:
         self.calls.append((idx, strategy))
         return {
             "claim_status": FakeAnalyzer.statuses[idx],
-            "usage": {"total_tokens": 100},
+            "usage": {
+                "total_tokens": 100,
+                "prompt_tokens": 80,
+                "completion_tokens": 20,
+            },
         }
 
 
@@ -270,7 +322,9 @@ class TestRunEvaluationReportPipeline:
         assert basic["correct"] == 1 and basic["total"] == 2
         assert basic["accuracy"] == pytest.approx(50.0)
         assert basic["total_tokens"] == 200
-        assert basic["total_cost"] == pytest.approx(0.2 / 1000 * 10)
+        assert basic["input_tokens"] == 160 and basic["output_tokens"] == 40
+        # 160 in at $1.50/M + 40 out at $9.00/M
+        assert basic["total_cost"] == pytest.approx(160 * 1.5 / 1e6 + 40 * 9.0 / 1e6)
         assert basic["duration"] >= 0
         assert isinstance(basic["accuracy"], float)
 

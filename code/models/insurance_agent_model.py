@@ -7,8 +7,6 @@
 # Python Libraries
 import json
 
-# Vendor Libraries
-from evaluation.usage_tracker import UsageTracker
 from openai import OpenAI
 from openai.types.chat import ChatCompletion
 
@@ -22,6 +20,9 @@ from src.constants import (
     RESPONSE_SCHEMA,
     USER_DATA_PAYLOAD_TEMPLATE,
 )
+
+# Vendor Libraries
+from src.usage_tracker import UsageTracker
 from src.utils import show_banner
 
 

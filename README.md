@@ -281,14 +281,7 @@ Properties you can rely on:
 - `severity` is reset to `unknown` when the status is `not_enough_information` with a concrete severity.
 - Apostrophes are stripped from text cells, and newlines in `user_claim` become ` | `.
 
-With `--eval`, `code/evaluation/evaluation_report.md` is also written with per-strategy accuracy, latency, token use
-and estimated cost, e.g.:
-
-```text
-| Strategy                | Accuracy | Latency (avg) | Cost (est) |
-| Basic Prompt            | 50.00%   | 177.14s       | $0.88      |
-| Chain-of-Thought Prompt | 50.00%   | 155.84s       | $0.88      |
-```
+With `--eval`, `code/evaluation/evaluation_report.md` is also written; see [Results](#results) for its contents.
 
 ---
 
@@ -320,8 +313,11 @@ throughput and pacing, is in [code/evaluation/evaluation_report.md](code/evaluat
 
 | Strategy                | Correct | Accuracy | Total Time | Avg Latency / Claim | Cost (est) |
 |-------------------------|--------:|---------:|-----------:|--------------------:|-----------:|
-| Basic Prompt            | 10 / 20 |   50.00% |    177.14s |               8.86s |      $0.88 |
-| Chain-of-Thought Prompt | 10 / 20 |   50.00% |    155.84s |               7.79s |      $0.88 |
+| Basic Prompt            | 10 / 20 |   50.00% |    177.14s |               8.86s | $0.13 to $0.80 |
+| Chain-of-Thought Prompt | 10 / 20 |   50.00% |    155.84s |               7.79s | $0.13 to $0.80 |
+
+Cost is a range because that run recorded only combined token totals (176,824 across both strategies), not the
+input/output split. Re-running `--eval` records the split and reports an exact figure.
 
 **Read these numbers with the class balance in mind.** The sample set is 12 `supported`, 5 `contradicted` and 3
 `not_enough_information`, so a model that always answers `supported` scores 60%. Both strategies scored below that
@@ -338,7 +334,7 @@ rule-layer changes most likely to help.
 
 ## Running the Unit Tests
 
-Run from `code/` (that is where `pytest.ini` lives). No test calls the network, the real dataset or the real log
+The suite has 313 tests with 100% line coverage. Run from `code/` (that is where `pytest.ini` lives). No test calls the network, the real dataset or the real log
 file; the OpenAI client is always mocked.
 
 ```bash
@@ -397,8 +393,18 @@ Rate-limit handling:
   an exhausted quota) the run stops with the error instead of retrying forever.
 - The OpenAI client itself retries transient failures up to 3 times with a 120-second timeout.
 
-These values live in [code/src/constants.py](code/src/constants.py). Cost figures depend on the model and the pricing
-assumed in the report, so treat them as estimates.
+These values live in [code/src/constants.py](code/src/constants.py).
+
+**Cost model.** Input and output tokens are priced separately, from the `usage` counts in each API response:
+
+| Model             | Input (per 1M tokens) | Output (per 1M tokens) |
+|-------------------|----------------------:|-----------------------:|
+| `gemini-3.5-flash` |                 $1.50 |                  $9.00 |
+
+These rates come from third-party price trackers. Google's own pricing page does not currently list
+`gemini-3.5-flash` (it lists newer Flash models at different rates), so check the provider's rate sheet before using
+the figures for budgeting. To price a different model, change `PRICING_MODEL`, `INPUT_PRICE_PER_UNIT` and
+`OUTPUT_PRICE_PER_UNIT` in `constants.py`.
 
 ---
 
@@ -420,7 +426,7 @@ assumed in the report, so treat them as estimates.
 - **Small evaluation set.** 20 labeled claims is enough to catch regressions, not to rank strategies.
 - **Only `claim_status` is scored.** Per-field accuracy (issue type, object part, severity, risk flags) is not
   computed.
-- **Cost is an estimate** based on a flat per-token rate, not the provider's actual pricing.
+- **Cost depends on third-party rates** for `gemini-3.5-flash`; confirm them against the provider before budgeting.
 - **No response caching.** Re-running re-sends every claim to the model.
 
 ---

@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 
 MAX_TOKENS = 4096
-TOKEN_UNIT = 1000
+TOKEN_UNIT = 1_000_000  # pricing is quoted per million tokens
 SECS_IN_MIN = 60
 PAUSE_TIMER = 1
 SLEEP_TIMER = 20
@@ -32,6 +32,13 @@ OUTPUT_FILE = DATASET_DIR + "output.csv"
 REPORT_FILE = str(CODE_DIR / "evaluation" / "evaluation_report.md")
 SAMPLE_CLAIMS_FILE = DATASET_DIR + "sample_claims.csv"
 USER_HISTORY_FILE = DATASET_DIR + "user_history.csv"
+
+# Pricing for the evaluated model (USD per TOKEN_UNIT tokens). Reported by
+# third-party price trackers; Google's own pricing page does not currently list
+# gemini-3.5-flash, so verify against the provider before budgeting.
+PRICING_MODEL = "gemini-3.5-flash"
+INPUT_PRICE_PER_UNIT = 1.50
+OUTPUT_PRICE_PER_UNIT = 9.00
 
 DECISION_S = "supported"
 DECISION_C = "contradicted"
